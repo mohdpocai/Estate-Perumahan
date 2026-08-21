@@ -1,0 +1,1631 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pengurusan Rumah Pekerja - LP2</title>
+  <!-- Pustaka html2canvas & jsPDF untuk Fungsi Ekstrak PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- Firebase (untuk sinkronisasi data merentasi peranti) -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; margin: 0; padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #0F172A; color: #F8FAFC; overflow: hidden;
+    }
+    #app-container { display: flex; width: 100vw; height: 100vh; position: relative; }
+    
+    /* Area Viewport / Canvas */
+    #canvas-container {
+      flex: 1; height: 100%; position: relative;
+      background-color: #1E293B; overflow: hidden;
+      cursor: grab; touch-action: none;
+    }
+    #canvas-container:active { cursor: grabbing; }
+
+    #canvas-viewport {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%; transform-origin: 0 0;
+      background-image: 
+        linear-gradient(to right, rgba(51, 65, 85, 0.4) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(51, 65, 85, 0.4) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    /* Floating Toolbar */
+    .toolbar {
+      position: absolute; top: 15px; left: 15px; z-index: 100;
+      background: #0F172A; border: 1px solid #334155; padding: 10px;
+      border-radius: 8px; display: flex; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      align-items: center; max-width: calc(100vw - 30px); overflow-x: auto;
+      white-space: nowrap;
+    }
+    /* Toolbar utama (tambah bangunan, zoom, dsb) diletak di bawah bar peta */
+    .map-toolbar + .toolbar { top: 62px; }
+    .map-toolbar { z-index: 101; }
+    #mapSelector {
+      background: #1E293B; color: #F8FAFC; border: 1px solid #334155;
+      border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: bold;
+      max-width: 160px;
+    }
+    .btn-map-new { background: #22C55E; color: #0F172A; }
+    .btn-map-rename { background: #64748B; color: white; padding: 8px 10px; }
+    .btn-map-delete { background: #EF4444; color: white; padding: 8px 10px; }
+    .btn-tool {
+      border: none; padding: 8px 12px;
+      border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;
+      flex-shrink: 0;
+    }
+    .btn-pekerja { background: #10B981; color: #0F172A; }
+    .btn-office { background: #38BDF8; color: #0F172A; }
+    .btn-kedai { background: #F59E0B; color: #0F172A; }
+    .btn-dewan { background: #A855F7; color: white; }
+    .btn-store { background: #D97706; color: white; }
+    .btn-surau { background: #059669; color: white; }
+    .btn-tool-road { background: #64748B; color: white; }
+    .btn-zoom { background: #3B82F6; color: white; }
+    .btn-align-grid { background: #6366F1; color: white; }
+    .btn-reset-view { background: #475569; color: white; }
+    .btn-lock { background: #EAB308; color: #0F172A; }
+    .btn-lock.locked { background: #EF4444; color: white; }
+    .btn-tool-sidebar { background: #F43F5E; color: white; margin-left: 5px; }
+    .btn-export-all-pdf { background: #EC4899; color: white; margin-left: 5px; }
+    .btn-backup { background: #0EA5E9; color: white; margin-left: 5px; }
+    .btn-restore { background: #14B8A6; color: white; margin-left: 5px; display: inline-flex; align-items: center; }
+    .btn-tool:hover { opacity: 0.9; }
+
+    .zoom-display {
+      font-size: 12px; font-weight: bold; color: #38BDF8;
+      padding: 0 4px; min-width: 45px; text-align: center; flex-shrink: 0;
+    }
+
+    /* Element Kanvas */
+    .element-box {
+      position: absolute; border-radius: 4px; cursor: move;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 12px; user-select: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3); border: 2px solid transparent;
+      text-align: center; flex-direction: column; padding: 4px;
+      transform-origin: center center; touch-action: none;
+      transition: left 0.15s ease-out, top 0.15s ease-out, width 0.15s ease-out, height 0.15s ease-out, transform 0.15s ease-out;
+    }
+
+    .element-box.is-locked { cursor: pointer !important; }
+
+    .element-box.dragging, .element-box.resizing, .element-box.rotating {
+      transition: none !important;
+    }
+    
+    .type-pekerja { background: #10B981; color: #0F172A; border-color: #34D399; }
+    .type-office { background: #38BDF8; color: #0F172A; border-color: #7DD3FC; }
+    .type-kedai { background: #F59E0B; color: #0F172A; border-color: #FCD34D; }
+    .type-dewan { background: #A855F7; color: #FFFFFF; border-color: #C084FC; }
+    .type-store { background: #D97706; color: #FFFFFF; border-color: #FBBF24; }
+    .type-surau { background: #059669; color: #FFFFFF; border-color: #34D399; }
+    .type-road { background: #475569; color: #CBD5E1; border-color: #94A3B8; flex-direction: row; }
+
+    .element-box.active {
+      border-color: #FFFFFF !important; box-shadow: 0 0 14px #FFFFFF;
+    }
+
+    .resize-handle {
+      position: absolute; right: -5px; bottom: -5px;
+      width: 12px; height: 12px; background-color: #FFFFFF;
+      border: 2px solid #0F172A; border-radius: 2px;
+      cursor: nwse-resize; display: none; touch-action: none;
+    }
+    /* Larger invisible touch target so fingers can grab the small handle */
+    .resize-handle::before {
+      content: ''; position: absolute; top: -12px; left: -12px; right: -12px; bottom: -12px;
+    }
+
+    .rotate-handle {
+      position: absolute; top: -25px; left: 50%;
+      transform: translateX(-50%);
+      width: 16px; height: 16px; background-color: #38BDF8;
+      border: 2px solid #FFFFFF; border-radius: 50%;
+      cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      touch-action: none;
+    }
+    .rotate-handle::after {
+      content: ''; position: absolute; top: 14px; left: 5px;
+      width: 2px; height: 8px; background-color: #38BDF8;
+    }
+    .rotate-handle::before {
+      content: ''; position: absolute; top: -12px; left: -12px; right: -12px; bottom: -12px;
+    }
+
+    /* Pemegang resize/rotate hanya muncul jika tidak terkunci */
+    .element-box.active:not(.is-locked) .resize-handle,
+    .element-box.active:not(.is-locked) .rotate-handle { display: block; }
+
+    /* Sidebar Off-canvas */
+    #sidebar {
+      position: absolute; top: 0; right: -420px; width: 420px; max-width: 100vw; height: 100%;
+      background: #0F172A; border-left: 1px solid #334155;
+      display: flex; flex-direction: column; z-index: 200;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+      transition: right 0.3s ease-in-out;
+    }
+
+    #sidebar.open { right: 0; }
+
+    .sidebar-header { 
+      padding: 16px; background: #1E293B; border-bottom: 1px solid #334155;
+      display: flex; flex-direction: column; position: relative;
+    }
+    .sidebar-header h2 { margin: 0 0 4px 0; font-size: 16px; color: #10B981; }
+    
+    .btn-close-sidebar {
+      position: absolute; top: 12px; right: 12px;
+      background: transparent; border: none; color: #94A3B8;
+      font-size: 18px; font-weight: bold; cursor: pointer;
+    }
+    .btn-close-sidebar:hover { color: #EF4444; }
+
+    .search-box input {
+      width: 100%; padding: 8px; background: #0F172A; border: 1px solid #334155;
+      border-radius: 6px; color: white; font-size: 12px; margin-top: 8px;
+    }
+
+    .sidebar-content { flex: 1; padding: 16px; overflow-y: auto; }
+    .placeholder-text { text-align: center; color: #64748B; margin-top: 40px; font-size: 13px; line-height: 1.5; }
+
+    /* Form Styles & Checklist Grid */
+    .form-group { margin-bottom: 10px; }
+    .form-group label { display: block; font-size: 11px; color: #CBD5E1; margin-bottom: 4px; }
+    .form-group input, .form-group select {
+      width: 100%; padding: 8px; background: #1E293B; border: 1px solid #334155;
+      border-radius: 6px; color: white; font-size: 12px;
+    }
+    
+    .door-card {
+      background: #1E293B; border: 1px solid #334155; border-radius: 6px;
+      padding: 10px; margin-bottom: 10px; border-left: 3px solid #10B981;
+    }
+    .door-card-title { font-size: 12px; font-weight: bold; color: #10B981; margin-bottom: 6px; }
+
+    .checklist-title { font-size: 11px; font-weight: bold; color: #CBD5E1; margin: 8px 0 4px 0; }
+    
+    .item-row {
+      background: #0F172A; border: 1px solid #334155; border-radius: 6px;
+      padding: 8px; margin-bottom: 6px;
+    }
+    .item-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      font-size: 11px; color: #E2E8F0; font-weight: bold;
+    }
+    .item-header input[type="checkbox"] { width: 14px; height: 14px; accent-color: #10B981; cursor: pointer; }
+    
+    .item-details {
+      margin-top: 6px; padding-top: 6px; border-top: 1px dashed #334155;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .item-details input[type="date"] {
+      padding: 4px 6px; background: #1E293B; border: 1px solid #334155;
+      color: white; border-radius: 4px; font-size: 11px;
+    }
+    
+    /* Dual Action Buttons (Kamera & Galeri) */
+    .image-action-buttons {
+      display: flex; gap: 6px; margin-top: 4px;
+    }
+    .btn-camera-action {
+      flex: 1; padding: 6px 4px; border: 1px solid #38BDF8; background: #0284C7;
+      color: white; border-radius: 6px; font-size: 10px; font-weight: bold;
+      cursor: pointer; text-align: center; user-select: none;
+    }
+    .btn-gallery-action {
+      flex: 1; padding: 6px 4px; border: 1px solid #34D399; background: #059669;
+      color: white; border-radius: 6px; font-size: 10px; font-weight: bold;
+      cursor: pointer; text-align: center; user-select: none;
+    }
+    .btn-camera-action:hover, .btn-gallery-action:hover { opacity: 0.9; }
+    
+    .img-preview-container {
+      position: relative; display: inline-block; margin-top: 6px;
+    }
+    .img-preview {
+      width: 80px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #38BDF8;
+    }
+    .btn-remove-img {
+      position: absolute; top: -6px; right: -6px; background: #EF4444; color: white;
+      border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px;
+      cursor: pointer; font-weight: bold; line-height: 18px; text-align: center; padding: 0;
+    }
+
+    .btn-action { width: 100%; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+    .btn-pdf { background: #0284C7; color: white; }
+    .btn-delete { background: #EF4444; color: white; }
+
+    /* Modal Kamera Direct Stream */
+    #camera-modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.95); z-index: 1000;
+      flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+    }
+    #camera-video {
+      width: 100%; max-width: 500px; height: auto; max-height: 60vh;
+      background: #000; border-radius: 8px; border: 2px solid #38BDF8; object-fit: cover;
+    }
+    .camera-controls {
+      display: flex; gap: 12px; margin-top: 15px; width: 100%; max-width: 500px;
+    }
+    .btn-capture {
+      flex: 1; padding: 12px; background: #10B981; color: white;
+      border: none; border-radius: 6px; font-weight: bold; cursor: pointer;
+    }
+    .btn-cancel-cam {
+      flex: 1; padding: 12px; background: #EF4444; color: white;
+      border: none; border-radius: 6px; font-weight: bold; cursor: pointer;
+    }
+
+    /* Loading Overlay */
+    #loading-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.85); z-index: 999;
+      justify-content: center; align-items: center; flex-direction: column; color: #38BDF8; font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loading-overlay">
+    <div style="font-size: 18px; margin-bottom: 10px;">📄 Menyedia, Mengorientasi & Tangkap Map Ke PDF...</div>
+    <div style="font-size: 12px; color: #94A3B8;">Sila tunggu sebentar.</div>
+  </div>
+
+  <div id="sync-overlay" style="display:flex; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,23,42,0.95); z-index:1001; align-items:center; justify-content:center; flex-direction:column; color:#38BDF8; font-weight:bold; text-align:center; padding:20px;">
+    <div id="syncStatusText" style="font-size:16px; margin-bottom:8px;">🔌 Menyambung ke pelayan data...</div>
+    <div style="font-size:12px; color:#94A3B8; max-width:320px;">Pastikan anda mempunyai sambungan internet dan telah menampal `firebaseConfig` yang betul dalam fail ini.</div>
+  </div>
+
+  <!-- Modal Tangkap Gambar Direct Camera Stream -->
+  <div id="camera-modal">
+    <h3 style="color:#38BDF8; margin-bottom:10px;">Tangkap Gambar Bukti</h3>
+    <video id="camera-video" autoplay playsinline></video>
+    <div class="camera-controls">
+      <button class="btn-capture" onclick="takePicture()">📸 Ambil Gambar</button>
+      <button class="btn-cancel-cam" onclick="closeCameraModal()">Batal</button>
+    </div>
+  </div>
+
+  <div id="app-container">
+    <div id="canvas-container">
+      <div class="toolbar map-toolbar">
+        <span style="font-size:12px; opacity:0.8;">🗂️ Peta:</span>
+        <select id="mapSelector" onchange="onMapSelectorChange(this)"></select>
+        <button class="btn-tool btn-map-new" onclick="createNewMap()" title="Cipta peta baru (berasingan sepenuhnya)">➕ Peta Baru</button>
+        <button class="btn-tool btn-map-rename" onclick="renameCurrentMap()" title="Namakan semula peta ini">✏️</button>
+        <button class="btn-tool btn-map-delete" onclick="deleteCurrentMap()" title="Padam peta ini">🗑️</button>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn-tool btn-pekerja" onclick="addBuilding('pekerja')">🏠 Pekerja</button>
+        <button class="btn-tool btn-office" onclick="addBuilding('office')">🏢 Office</button>
+        <button class="btn-tool btn-kedai" onclick="addBuilding('kedai')">🏪 Kedai</button>
+        <button class="btn-tool btn-dewan" onclick="addBuilding('dewan')">🏛️ Dewan</button>
+        <button class="btn-tool btn-store" onclick="addBuilding('store')">📦 Store</button>
+        <button class="btn-tool btn-surau" onclick="addBuilding('surau')">🕌 Surau</button>
+        <button class="btn-tool btn-tool-road" onclick="addRoad()">🛣️ Jalan</button>
+        
+        <!-- Controls Zoom, Snap & Kunci Layout -->
+        <button class="btn-tool btn-zoom" onclick="zoomIn()">🔍 +</button>
+        <span class="zoom-display" id="zoomVal">100%</span>
+        <button class="btn-tool btn-zoom" onclick="zoomOut()">🔍 -</button>
+        <button class="btn-tool btn-zoom" onclick="resetZoom()">100%</button>
+
+        <button class="btn-tool btn-align-grid" onclick="alignAllToGrid()">📐 Snap Grid</button>
+        <button class="btn-tool btn-reset-view" onclick="resetView()">🎯 Reset View</button>
+        
+        <!-- Butang Utama Kunci Layout -->
+        <button class="btn-tool btn-lock" id="btnLock" onclick="toggleLockLayout()">🔓 Layout Bebas</button>
+
+        <button class="btn-tool btn-tool-sidebar" onclick="toggleSidebar()">📋 Pengurusan</button>
+        <button class="btn-tool btn-export-all-pdf" onclick="exportPDF('all')">📄 Eksport Semua Ke PDF</button>
+        <button class="btn-tool btn-backup" onclick="exportDataJSON()" title="Muat turun data peta SEMASA (termasuk gambar) sebagai fail JSON">💾 Backup Data</button>
+        <label class="btn-tool btn-restore" title="Pulihkan data (ke peta semasa sahaja) daripada fail JSON backup">
+          📂 Restore Data
+          <input type="file" accept="application/json,.json" style="display:none;" onchange="importDataJSON(event)">
+        </label>
+      </div>
+
+      <div id="canvas-viewport"></div>
+    </div>
+
+    <!-- Sidebar Drawer -->
+    <div id="sidebar">
+      <div class="sidebar-header">
+        <button class="btn-close-sidebar" onclick="closeSidebar()">✖</button>
+        <h2>Pengurusan Pelan LP2</h2>
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Cari penghuni..." oninput="searchElements()">
+        </div>
+      </div>
+
+      <div class="sidebar-content" id="sidebarContent">
+        <div class="placeholder-text">
+          • Klik dua kali (**Double-click**) pada mana-mana Rumah Pekerja untuk menguruskan penghuni, tarikh penggantian, tangkap/muat naik gambar bukti & mencetak PDF.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =====================================================================
+    // KONFIGURASI FIREBASE - GANTIKAN dengan config projek Firebase anda
+    // (Firebase Console > Project settings > Your apps > SDK setup)
+    // storageBucket boleh dibiarkan kosong - Cloud Storage tidak digunakan;
+    // gambar disimpan terus dalam Firestore (Spark/free plan mencukupi).
+    // =====================================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyCmc1cccrzh29H6SzWPt84a8rK1x747jU8",
+      authDomain: "estate-perumahan.firebaseapp.com",
+      projectId: "estate-perumahan",
+      messagingSenderId: "821767387974",
+      appId: "1:821767387974:web:e933ff358659c498994347"
+    };
+
+    // Bangunan/jalan disimpan dalam satu koleksi (tanpa data pintu - kecil
+    // & pantas). Setiap pintu (dengan checklist + gambar) ialah DOKUMEN
+    // BERASINGAN dalam koleksi kedua, supaya satu bangunan dengan banyak
+    // gambar tidak melebihi had 1MB setiap dokumen Firestore.
+    //
+    // Semua data (elemen, pintu, tetapan kunci) mempunyai medan `mapId` -
+    // ini membolehkan berbilang PETA berasingan (contoh: Blok A, Blok B)
+    // wujud dalam pangkalan data yang sama tanpa saling mengganggu.
+    const MAPS_COLLECTION = 'lp2_maps';
+    const ELEMENTS_COLLECTION = 'lp2_elements';
+    const DOORS_COLLECTION = 'lp2_doors';
+    const SETTINGS_COLLECTION = 'lp2_settings';
+    const DOOR_DOC_SAFE_BYTES = 900000; // amaran sebelum menghampiri had 1MB Firestore
+    const LAST_MAP_KEY = 'lp2_lastMapId'; // ingatan tempatan (peranti ini sahaja)
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    const syncOverlay = document.getElementById('sync-overlay');
+    const syncStatusText = document.getElementById('syncStatusText');
+    let hasReceivedFirstSnapshot = false;
+
+    const GRID_SIZE = 20;
+    const DOOR_COUNT = 6;
+    // Imej dimampatkan lebih kecil sebab ia disimpan TERUS dalam Firestore
+    // (bukan Cloud Storage) - setiap dokumen pintu perlu kekal jauh di
+    // bawah had 1MB walaupun semua 7 item checklist ada gambar.
+    const MAX_IMAGE_DIMENSION = 640; // px
+    const IMAGE_QUALITY = 0.55;
+    const MAX_UPLOAD_FILE_BYTES = 20 * 1024 * 1024; // 20MB raw upload cap, before compression
+    let elements = [];
+    let buildingsRaw = [];               // dokumen lp2_elements (peta semasa), tanpa 'doors'
+    let doorsByBuilding = {};            // buildingId -> [doorDoc, doorDoc, ...]
+    let selectedId = null;
+
+    let mapsList = [];                   // semua peta {id, name, createdAt}
+    let currentMapId = null;
+    let dataUnsubscribers = [];          // pendengar Firestore untuk peta SEMASA sahaja
+
+    // Escapes text before it is interpolated into HTML strings, to avoid
+    // broken markup / broken inline handlers when a name contains quotes,
+    // angle brackets, etc.
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[ch]));
+    }
+
+    // Resizes/compresses an image (from a File or a data URL) before it is
+    // stored, so photos stay small and fast to sync across devices.
+    function compressImageSource(source) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+            const scale = MAX_IMAGE_DIMENSION / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', IMAGE_QUALITY));
+        };
+        img.onerror = () => reject(new Error('Gagal memproses imej.'));
+        img.src = source;
+      });
+    }
+
+    // Tetapan Status Kunci Layout (disegerakkan melalui Firestore, per-peta)
+    let isLayoutLocked = false;
+
+    // ---- Sambungan & sinkronisasi masa nyata ----
+    auth.signInAnonymously().catch(err => {
+      syncStatusText.textContent = '❌ Gagal sambung: ' + err.message;
+    });
+
+    auth.onAuthStateChanged(user => {
+      if (user) startMapsListener();
+    });
+
+    // Mendengar senarai SEMUA peta yang wujud. Peta pertama dipilih secara
+    // automatik (ikut peta terakhir dilihat pada peranti ini, jika ada).
+    function startMapsListener() {
+      db.collection(MAPS_COLLECTION).orderBy('createdAt', 'asc').onSnapshot(async snapshot => {
+        mapsList = snapshot.docs.map(d => d.data());
+        renderMapSelector();
+
+        if (!currentMapId) {
+          // Pemilihan awal: guna peta terakhir dilihat pada peranti ini jika
+          // ia masih wujud, jika tidak guna peta pertama, jika tiada peta
+          // langsung cipta satu peta lalai.
+          const lastId = localStorage.getItem(LAST_MAP_KEY);
+          if (lastId && mapsList.some(m => m.id === lastId)) {
+            switchMap(lastId);
+          } else if (mapsList.length > 0) {
+            switchMap(mapsList[0].id);
+          } else {
+            await createNewMap('Peta Utama', true);
+          }
+        } else if (!mapsList.some(m => m.id === currentMapId)) {
+          // Peta semasa telah dipadam (oleh peranti lain) - beralih ke peta lain.
+          if (mapsList.length > 0) {
+            switchMap(mapsList[0].id);
+          } else {
+            currentMapId = null;
+            await createNewMap('Peta Utama', true);
+          }
+        }
+      }, err => {
+        syncStatusText.textContent = '❌ Ralat senarai peta: ' + err.message;
+        syncOverlay.style.display = 'flex';
+      });
+    }
+
+    // Berhenti mendengar data peta lama, kemudian mula mendengar data peta
+    // baru. Dipanggil setiap kali pengguna menukar peta.
+    function switchMap(mapId) {
+      if (mapId === currentMapId) return;
+
+      dataUnsubscribers.forEach(unsub => unsub());
+      dataUnsubscribers = [];
+
+      currentMapId = mapId;
+      localStorage.setItem(LAST_MAP_KEY, mapId);
+
+      selectedId = null;
+      buildingsRaw = [];
+      doorsByBuilding = {};
+      elements = [];
+      isLayoutLocked = false;
+      hasReceivedFirstSnapshot = false;
+      syncOverlay.style.display = 'flex';
+      syncStatusText.textContent = '🔌 Memuatkan peta...';
+      closeSidebar();
+
+      startRealtimeSync(mapId);
+      renderMapSelector();
+    }
+
+    function startRealtimeSync(mapId) {
+      const unsubElements = db.collection(ELEMENTS_COLLECTION).where('mapId', '==', mapId)
+        .onSnapshot(snapshot => {
+          if (mapId !== currentMapId) return; // pendengar lapuk (peta sudah ditukar)
+          buildingsRaw = snapshot.docs.map(d => d.data());
+          if (!hasReceivedFirstSnapshot) {
+            hasReceivedFirstSnapshot = true;
+            syncOverlay.style.display = 'none';
+          }
+          mergeAndRender();
+        }, err => {
+          syncStatusText.textContent = '❌ Ralat sinkronisasi: ' + err.message;
+          syncOverlay.style.display = 'flex';
+        });
+
+      const unsubDoors = db.collection(DOORS_COLLECTION).where('mapId', '==', mapId)
+        .onSnapshot(snapshot => {
+          if (mapId !== currentMapId) return;
+          const map = {};
+          snapshot.forEach(doc => {
+            const d = doc.data();
+            if (!map[d.buildingId]) map[d.buildingId] = [];
+            map[d.buildingId][d.doorIndex] = d;
+          });
+          doorsByBuilding = map;
+          mergeAndRender();
+        }, err => {
+          syncStatusText.textContent = '❌ Ralat sinkronisasi pintu: ' + err.message;
+          syncOverlay.style.display = 'flex';
+        });
+
+      const unsubSettings = db.collection(SETTINGS_COLLECTION).doc(mapId).onSnapshot(doc => {
+        if (mapId !== currentMapId) return;
+        isLayoutLocked = !!(doc.exists && doc.data().isLayoutLocked);
+        updateLockUI();
+      });
+
+      dataUnsubscribers = [unsubElements, unsubDoors, unsubSettings];
+    }
+
+    // Combines the buildings/roads collection with the doors collection
+    // into the in-memory `elements` array the rest of the app works with.
+    function mergeAndRender() {
+      elements = buildingsRaw.map(item => {
+        if (item.type === 'building' && item.category === 'pekerja') {
+          const existingDoors = doorsByBuilding[item.id] || [];
+          const doors = Array.from({length: DOOR_COUNT}, (_, i) => existingDoors[i] || createDefaultDoor());
+          return { ...item, doors };
+        }
+        return item;
+      });
+      renderCanvas();
+      if (selectedId) renderSidebarForm(selectedId);
+    }
+
+    // Writes one building/road's position/size/etc to Firestore. Doors are
+    // saved separately via saveDoor() - never embedded here.
+    function saveElement(item) {
+      const { doors, ...docData } = item;
+      db.collection(ELEMENTS_COLLECTION).doc(item.id).set(docData).catch(err => {
+        alert('Gagal simpan ke pelayan: ' + err.message);
+      });
+    }
+
+    // Writes one door (its checklist + photos) as its own Firestore
+    // document, keyed by building + door index.
+    function saveDoor(buildingId, doorIndex, doorData) {
+      const payload = { buildingId, doorIndex, mapId: currentMapId, ...doorData };
+      const approxBytes = JSON.stringify(payload).length;
+      if (approxBytes > DOOR_DOC_SAFE_BYTES) {
+        alert('Amaran: rekod pintu ini semakin besar (terlalu banyak/besar gambar). Sila padam sekurang-kurangnya satu gambar sebelum menambah lagi, jika tidak simpanan mungkin gagal.');
+      }
+      db.collection(DOORS_COLLECTION).doc(`${buildingId}_d${doorIndex}`).set(payload).catch(err => {
+        alert('Gagal simpan pintu ke pelayan: ' + err.message);
+      });
+    }
+
+    function saveLockedState() {
+      db.collection(SETTINGS_COLLECTION).doc(currentMapId)
+        .set({ isLayoutLocked })
+        .catch(err => alert('Gagal simpan status kunci: ' + err.message));
+    }
+
+    // ---- Pengurusan Peta (create/rename/delete/switch) ----
+
+    async function createNewMap(presetName, isAutoCreated) {
+      const name = presetName || prompt('Nama peta baru (contoh: Blok A, Perumahan Sungai Buloh):', '');
+      if (!name || !name.trim()) return;
+
+      const id = crypto.randomUUID();
+      await db.collection(MAPS_COLLECTION).doc(id).set({
+        id, name: name.trim(), createdAt: new Date().toISOString()
+      });
+
+      // Peta "Peta Utama" pertama sekali dicipta secara automatik apabila
+      // tiada senarai peta wujud lagi - pada ketika itu, data lama (dari
+      // sebelum ciri berbilang-peta ini wujud) mungkin masih tersimpan
+      // tanpa medan `mapId`. Pindahkan data lama itu ke peta baru ini
+      // supaya ia tidak "hilang" / terputus daripada mana-mana peta.
+      if (isAutoCreated) {
+        await migrateLegacyDataToMap(id);
+      }
+
+      if (!isAutoCreated) switchMap(id);
+      else if (!currentMapId) switchMap(id);
+    }
+
+    // Menyerap data lama (sebelum ciri berbilang-peta) yang tiada medan
+    // `mapId` ke dalam peta yang diberikan, supaya "peta semasa" pengguna
+    // kekal utuh selepas kemas kini ini. Selamat dipanggil berulang kali -
+    // dokumen yang sudah ada `mapId` diabaikan.
+    async function migrateLegacyDataToMap(mapId) {
+      try {
+        const batch = db.batch();
+        let hasChanges = false;
+
+        const legacyElements = await db.collection(ELEMENTS_COLLECTION).get();
+        legacyElements.forEach(doc => {
+          if (!doc.data().mapId) {
+            batch.update(doc.ref, { mapId });
+            hasChanges = true;
+          }
+        });
+
+        const legacyDoors = await db.collection(DOORS_COLLECTION).get();
+        legacyDoors.forEach(doc => {
+          if (!doc.data().mapId) {
+            batch.update(doc.ref, { mapId });
+            hasChanges = true;
+          }
+        });
+
+        // Tetapan kunci lama (sebelum ciri berbilang-peta) disimpan di
+        // lp2_settings/layout - salin ke dokumen tetapan peta baru.
+        const legacySettingsDoc = await db.collection(SETTINGS_COLLECTION).doc('layout').get();
+        if (legacySettingsDoc.exists) {
+          batch.set(db.collection(SETTINGS_COLLECTION).doc(mapId), legacySettingsDoc.data(), { merge: true });
+          hasChanges = true;
+        }
+
+        if (hasChanges) await batch.commit();
+      } catch (err) {
+        alert('Amaran: gagal memindahkan data lama ke peta baru: ' + err.message + '\n\nSila hubungi penyokong teknikal jika data sedia ada anda tidak kelihatan.');
+      }
+    }
+
+    function renameCurrentMap() {
+      const current = mapsList.find(m => m.id === currentMapId);
+      const newName = prompt('Nama baru untuk peta ini:', current ? current.name : '');
+      if (!newName || !newName.trim()) return;
+      db.collection(MAPS_COLLECTION).doc(currentMapId).update({ name: newName.trim() })
+        .catch(err => alert('Gagal menamakan semula: ' + err.message));
+    }
+
+    async function deleteCurrentMap() {
+      if (mapsList.length <= 1) {
+        alert('Tidak boleh memadam peta terakhir. Cipta peta lain dahulu sebelum memadam peta ini.');
+        return;
+      }
+      const current = mapsList.find(m => m.id === currentMapId);
+      const confirmed = confirm(
+        `Padam peta "${current ? current.name : ''}" beserta SEMUA bangunan, pintu, dan gambar di dalamnya? Tindakan ini tidak boleh dibatalkan.`
+      );
+      if (!confirmed) return;
+
+      const mapIdToDelete = currentMapId;
+      try {
+        const batch = db.batch();
+        const elementsSnap = await db.collection(ELEMENTS_COLLECTION).where('mapId', '==', mapIdToDelete).get();
+        elementsSnap.forEach(doc => batch.delete(doc.ref));
+        const doorsSnap = await db.collection(DOORS_COLLECTION).where('mapId', '==', mapIdToDelete).get();
+        doorsSnap.forEach(doc => batch.delete(doc.ref));
+        batch.delete(db.collection(SETTINGS_COLLECTION).doc(mapIdToDelete));
+        batch.delete(db.collection(MAPS_COLLECTION).doc(mapIdToDelete));
+        await batch.commit();
+
+        currentMapId = null; // paksa startMapsListener pilih/cipta peta lain
+      } catch (err) {
+        alert('Gagal memadam peta: ' + err.message);
+      }
+    }
+
+    function onMapSelectorChange(selectEl) {
+      switchMap(selectEl.value);
+    }
+
+    function renderMapSelector() {
+      const select = document.getElementById('mapSelector');
+      if (!select) return;
+      select.innerHTML = mapsList.map(m =>
+        `<option value="${escapeHtml(m.id)}" ${m.id === currentMapId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`
+      ).join('');
+    }
+
+    let panX = 0, panY = 0, zoomLevel = 1.0;
+    const MIN_ZOOM = 0.2, MAX_ZOOM = 3.0;
+
+    let isPanning = false, startPanX = 0, startPanY = 0;
+
+    const container = document.getElementById('canvas-container');
+    const viewport = document.getElementById('canvas-viewport');
+    const sidebar = document.getElementById('sidebar');
+    const zoomValDisplay = document.getElementById('zoomVal');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const btnLock = document.getElementById('btnLock');
+
+    let cameraStream = null;
+    let activeCamTarget = { houseId: null, doorIndex: null, key: null };
+
+    const ITEMS_CHECKLIST = [
+      { key: 'katilSingle', label: 'Katil Single' },
+      { key: 'tilamSingle', label: 'Tilam Single' },
+      { key: 'katilQueen', label: 'Katil Queen' },
+      { key: 'tilamQueen', label: 'Tilam Queen' },
+      { key: 'dapurGas', label: 'Dapur Gas' },
+      { key: 'almari', label: 'Almari' },
+      { key: 'meatSafe', label: 'Meat Safe' }
+    ];
+
+    const CATEGORY_CONFIG = {
+      pekerja: { label: 'Rumah Pekerja', icon: '🏠', colorClass: 'type-pekerja', defaultW: 140, defaultH: 80 },
+      office: { label: 'Pejabat (Office)', icon: '🏢', colorClass: 'type-office', defaultW: 160, defaultH: 100 },
+      kedai: { label: 'Kedai / Mart', icon: '🏪', colorClass: 'type-kedai', defaultW: 140, defaultH: 80 },
+      dewan: { label: 'Dewan Serbaguna', icon: '🏛️', colorClass: 'type-dewan', defaultW: 200, defaultH: 120 },
+      store: { label: 'Store / Depo', icon: '📦', colorClass: 'type-store', defaultW: 160, defaultH: 100 },
+      surau: { label: 'Surau', icon: '🕌', colorClass: 'type-surau', defaultW: 160, defaultH: 100 },
+      jalan: { label: 'Jalan Utama', icon: '🛣️', colorClass: 'type-road', defaultW: 300, defaultH: 40 }
+    };
+
+    function updateLockUI() {
+      if (isLayoutLocked) {
+        btnLock.innerHTML = '🔒 Layout Terkunci';
+        btnLock.classList.add('locked');
+      } else {
+        btnLock.innerHTML = '🔓 Layout Bebas';
+        btnLock.classList.remove('locked');
+      }
+    }
+
+    function toggleLockLayout() {
+      isLayoutLocked = !isLayoutLocked;
+      saveLockedState();
+      updateLockUI();
+      renderCanvas();
+    }
+
+    function updateViewportTransform() {
+      viewport.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+      viewport.style.backgroundSize = `${20 * zoomLevel}px ${20 * zoomLevel}px`;
+      zoomValDisplay.textContent = `${Math.round(zoomLevel * 100)}%`;
+    }
+
+    function resetView() {
+      panX = 0; panY = 0; zoomLevel = 1.0;
+      updateViewportTransform();
+    }
+
+    function setZoom(newZoom, centerX = window.innerWidth / 2, centerY = window.innerHeight / 2) {
+      const clampedZoom = Math.min(Math.max(newZoom, MIN_ZOOM), MAX_ZOOM);
+      if (clampedZoom === zoomLevel) return;
+
+      const zoomFactor = clampedZoom / zoomLevel;
+      panX = centerX - (centerX - panX) * zoomFactor;
+      panY = centerY - (centerY - panY) * zoomFactor;
+
+      zoomLevel = clampedZoom;
+      updateViewportTransform();
+    }
+
+    function zoomIn() { setZoom(zoomLevel + 0.15); }
+    function zoomOut() { setZoom(zoomLevel - 0.15); }
+    function resetZoom() { setZoom(1.0); }
+
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.1 : -0.1;
+      setZoom(zoomLevel + delta, e.clientX, e.clientY);
+    }, { passive: false });
+
+    container.addEventListener('mousedown', (e) => {
+      if (e.target === container || e.target === viewport) {
+        isPanning = true;
+        startPanX = e.clientX - panX;
+        startPanY = e.clientY - panY;
+        selectedId = null;
+        renderCanvas();
+        closeSidebar();
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isPanning) return;
+      panX = e.clientX - startPanX;
+      panY = e.clientY - startPanY;
+      updateViewportTransform();
+    });
+
+    window.addEventListener('mouseup', () => { isPanning = false; });
+
+    // ---- Sokongan sentuhan (telefon/tablet): panning & pinch-to-zoom ----
+    let pinchStartDist = null;
+    let pinchStartZoom = 1;
+
+    function touchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    container.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        pinchStartDist = touchDistance(e.touches);
+        pinchStartZoom = zoomLevel;
+        isPanning = false;
+      } else if (e.touches.length === 1 && (e.target === container || e.target === viewport)) {
+        isPanning = true;
+        startPanX = e.touches[0].clientX - panX;
+        startPanY = e.touches[0].clientY - panY;
+        selectedId = null;
+        renderCanvas();
+        closeSidebar();
+      }
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && pinchStartDist) {
+        e.preventDefault();
+        const newDist = touchDistance(e.touches);
+        const scale = newDist / pinchStartDist;
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        setZoom(pinchStartZoom * scale, midX, midY);
+      } else if (isPanning && e.touches.length === 1) {
+        e.preventDefault();
+        panX = e.touches[0].clientX - startPanX;
+        panY = e.touches[0].clientY - startPanY;
+        updateViewportTransform();
+      }
+    }, { passive: false });
+
+    container.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) pinchStartDist = null;
+      if (e.touches.length === 0) isPanning = false;
+    });
+
+    function snapToGrid(value) { return Math.round(value / GRID_SIZE) * GRID_SIZE; }
+
+    function openSidebar() { sidebar.classList.add('open'); }
+    function closeSidebar() { sidebar.classList.remove('open'); }
+    function toggleSidebar() { sidebar.classList.toggle('open'); }
+
+    // Exports all elements/doors/checklists as a single JSON file, as a
+    // manual backup on top of the live Firestore sync.
+    function exportDataJSON() {
+      const currentMap = mapsList.find(m => m.id === currentMapId);
+      const payload = {
+        exportVersion: 3,
+        exportedAt: new Date().toISOString(),
+        mapName: currentMap ? currentMap.name : '',
+        isLayoutLocked: isLayoutLocked,
+        elements: elements
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = (currentMap ? currentMap.name : 'Peta').replace(/[^a-z0-9]+/gi, '_');
+      a.download = `LP2_Backup_${safeName}_${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function importDataJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const data = JSON.parse(evt.target.result);
+          if (!data || !Array.isArray(data.elements)) {
+            throw new Error('Format fail tidak sah - tiada senarai elemen.');
+          }
+          const currentMap = mapsList.find(m => m.id === currentMapId);
+          const confirmed = confirm(
+            `Import akan MENGGANTIKAN ${elements.length} elemen semasa dalam peta "${currentMap ? currentMap.name : ''}" (untuk SEMUA peranti) dengan ${data.elements.length} elemen daripada fail. Peta lain tidak terjejas. Teruskan?`
+          );
+          if (!confirmed) return;
+
+          // Replace only the CURRENT map's docs: delete existing docs for
+          // this mapId, write the imported ones, in one atomic batch.
+          const batch = db.batch();
+          const existingElementsSnap = await db.collection(ELEMENTS_COLLECTION).where('mapId', '==', currentMapId).get();
+          existingElementsSnap.forEach(doc => batch.delete(doc.ref));
+          const existingDoorsSnap = await db.collection(DOORS_COLLECTION).where('mapId', '==', currentMapId).get();
+          existingDoorsSnap.forEach(doc => batch.delete(doc.ref));
+
+          data.elements.forEach(item => {
+            const { doors, ...rest } = item;
+            const docData = { ...rest, mapId: currentMapId };
+            batch.set(db.collection(ELEMENTS_COLLECTION).doc(item.id), docData);
+            if (Array.isArray(doors)) {
+              doors.forEach((doorData, doorIndex) => {
+                batch.set(db.collection(DOORS_COLLECTION).doc(`${item.id}_d${doorIndex}`), {
+                  buildingId: item.id, doorIndex, mapId: currentMapId, ...doorData
+                });
+              });
+            }
+          });
+          if (typeof data.isLayoutLocked === 'boolean') {
+            isLayoutLocked = data.isLayoutLocked;
+            batch.set(db.collection(SETTINGS_COLLECTION).doc(currentMapId), { isLayoutLocked });
+          }
+          await batch.commit();
+
+          selectedId = null;
+          closeSidebar();
+          alert('Import data berjaya! (Disegerakkan ke semua peranti untuk peta ini.)');
+        } catch (err) {
+          alert('Gagal mengimport fail: ' + err.message + '\n\nPetua: jika fail backup mempunyai banyak gambar besar, ia mungkin melebihi had 1MB setiap dokumen Firestore.');
+        } finally {
+          event.target.value = '';
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function alignAllToGrid() {
+      if (isLayoutLocked) {
+        alert("Layout sedang terkunci. Sila buka kunci (🔓) terlebih dahulu untuk membuat perubahan.");
+        return;
+      }
+      elements.forEach(item => {
+        item.x = snapToGrid(item.x);
+        item.y = snapToGrid(item.y);
+        item.w = Math.max(GRID_SIZE, snapToGrid(item.w));
+        item.h = Math.max(GRID_SIZE, snapToGrid(item.h));
+      });
+      const batch = db.batch();
+      elements.forEach(item => {
+        const { doors, ...docData } = item;
+        batch.set(db.collection(ELEMENTS_COLLECTION).doc(item.id), docData);
+      });
+      batch.commit().catch(err => alert('Gagal simpan ke pelayan: ' + err.message));
+      renderCanvas();
+      if (selectedId) selectElement(selectedId, false);
+    }
+
+    function createDefaultDoor() {
+      return {
+        nama: '',
+        jumlah: '1',
+        checklist: {}
+      };
+    }
+
+    function addBuilding(category) {
+      if (isLayoutLocked) {
+        alert("Layout sedang terkunci. Sila buka kunci (🔓) terlebih dahulu untuk menambah elemen.");
+        return;
+      }
+      const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.pekerja;
+      const id = category + '_' + crypto.randomUUID();
+      
+      const spawnX = snapToGrid((-panX + (window.innerWidth / 2) - 80) / zoomLevel);
+      const spawnY = snapToGrid((-panY + (window.innerHeight / 2) - 50) / zoomLevel);
+
+      const newBuilding = {
+        id: id,
+        mapId: currentMapId,
+        type: 'building',
+        category: category,
+        name: config.label,
+        x: spawnX,
+        y: spawnY,
+        w: snapToGrid(config.defaultW),
+        h: snapToGrid(config.defaultH),
+        rotation: 0
+      };
+
+      const batch = db.batch();
+      batch.set(db.collection(ELEMENTS_COLLECTION).doc(id), newBuilding);
+      if (category === 'pekerja') {
+        for (let i = 0; i < DOOR_COUNT; i++) {
+          batch.set(db.collection(DOORS_COLLECTION).doc(`${id}_d${i}`), {
+            buildingId: id, doorIndex: i, mapId: currentMapId, ...createDefaultDoor()
+          });
+        }
+      }
+      batch.commit().catch(err => alert('Gagal simpan ke pelayan: ' + err.message));
+
+      // Optimistic local update for a snappy UI - the listener reconciles moments later.
+      buildingsRaw.push(newBuilding);
+      if (category === 'pekerja') {
+        doorsByBuilding[id] = Array.from({length: DOOR_COUNT}, () => createDefaultDoor());
+      }
+      mergeAndRender();
+      selectElement(id, false);
+    }
+
+    function addRoad() {
+      if (isLayoutLocked) {
+        alert("Layout sedang terkunci. Sila buka kunci (🔓) terlebih dahulu untuk menambah jalan.");
+        return;
+      }
+      const id = 'road_' + crypto.randomUUID();
+      const spawnX = snapToGrid((-panX + (window.innerWidth / 2) - 150) / zoomLevel);
+      const spawnY = snapToGrid((-panY + (window.innerHeight / 2) - 20) / zoomLevel);
+
+      const newRoad = {
+        id: id,
+        mapId: currentMapId,
+        type: 'road',
+        category: 'jalan',
+        name: 'JALAN UTAMA',
+        x: spawnX,
+        y: spawnY,
+        w: snapToGrid(300),
+        h: snapToGrid(40),
+        rotation: 0
+      };
+      elements.push(newRoad);
+      saveElement(newRoad);
+      buildingsRaw.push(newRoad);
+      renderCanvas();
+      selectElement(id, false);
+    }
+
+    function renderCanvas() {
+      viewport.innerHTML = '';
+      elements.forEach(item => {
+        const div = document.createElement('div');
+        
+        let lockClass = isLayoutLocked ? 'is-locked' : '';
+
+        if (item.type === 'building') {
+          const config = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG.pekerja;
+          div.className = `element-box ${config.colorClass} ${item.id === selectedId ? 'active' : ''} ${lockClass}`;
+          div.innerHTML = `<div>${config.icon} ${escapeHtml(config.label)}</div>${item.category === 'pekerja' ? `<div style="font-size:10px; font-weight:normal;">(${DOOR_COUNT} Pintu)</div>` : ''}`;
+        } else {
+          div.className = `element-box type-road ${item.id === selectedId ? 'active' : ''} ${lockClass}`;
+          div.innerHTML = `🛣️ Jalan Utama`;
+        }
+
+        div.dataset.id = item.id;
+        div.style.left = item.x + 'px';
+        div.style.top = item.y + 'px';
+        div.style.width = item.w + 'px';
+        div.style.height = item.h + 'px';
+        div.style.transform = `rotate(${item.rotation || 0}deg)`;
+
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'resize-handle';
+        div.appendChild(resizeHandle);
+
+        const rotateHandle = document.createElement('div');
+        rotateHandle.className = 'rotate-handle';
+        rotateHandle.title = "Klik & seret untuk putar (Pegang Shift untuk snap 15°)";
+        div.appendChild(rotateHandle);
+
+        makeDraggableResizableRotatable(div, resizeHandle, rotateHandle, item);
+
+        div.onclick = (e) => { e.stopPropagation(); selectElement(item.id, false); };
+        div.ondblclick = (e) => { e.stopPropagation(); selectElement(item.id, true); };
+
+        viewport.appendChild(div);
+      });
+    }
+
+    function selectElement(id, shouldOpenSidebar = false) {
+      selectedId = id;
+      renderCanvas();
+
+      if (shouldOpenSidebar) openSidebar();
+
+      renderSidebarForm(id);
+    }
+
+    // Rebuilds just the sidebar form for the given element, without
+    // touching the canvas. Used after a field edit (checklist tick, date,
+    // photo) so a single field change doesn't re-render every building.
+    function renderSidebarForm(id) {
+      const item = elements.find(e => e.id === id);
+      if (!item) return;
+
+      let formHTML = '';
+
+      if (item.type === 'building') {
+        formHTML = `
+          <button class="btn-action btn-pdf" onclick="exportPDF('${item.id}')">📄 Eksport PDF Bangunan Ini</button>
+        `;
+
+        if (item.category === 'pekerja') {
+          formHTML += `<hr style="border-color:#334155; margin:12px 0;"><h4 style="margin:0 0 10px 0; color:#10B981;">Maklumat 6 Pintu</h4>`;
+          
+          if (!item.doors || item.doors.length === 0) {
+            item.doors = Array.from({length: DOOR_COUNT}, createDefaultDoor);
+          }
+
+          item.doors.forEach((door, index) => {
+            if (!door.checklist) door.checklist = {};
+
+            let checklistHTML = '';
+            ITEMS_CHECKLIST.forEach(chk => {
+              const itemData = door.checklist[chk.key] || { status: false, tarikh: '', gambar: '' };
+              const isChecked = itemData.status ? 'checked' : '';
+              
+              checklistHTML += `
+                <div class="item-row">
+                  <div class="item-header">
+                    <span>${chk.label}</span>
+                    <input type="checkbox" ${isChecked} onchange="updateChecklistStatus('${item.id}', ${index}, '${chk.key}', this.checked)">
+                  </div>
+                  ${itemData.status ? `
+                    <div class="item-details">
+                      <div class="form-group" style="margin:0;">
+                        <label style="font-size:10px;">Tarikh Diganti / Dibekal:</label>
+                        <input type="date" value="${itemData.tarikh || ''}" onchange="updateChecklistDate('${item.id}', ${index}, '${chk.key}', this.value)">
+                      </div>
+                      <div class="form-group" style="margin:0;">
+                        <label style="font-size:10px;">Gambar Bukti Kelengkapan:</label>
+                        
+                        <div class="image-action-buttons">
+                          <button class="btn-camera-action" type="button" onclick="openCameraModal('${item.id}', ${index}, '${chk.key}')">
+                            📸 Kamera
+                          </button>
+                          <label class="btn-gallery-action">
+                            🖼️ Galeri / Fail
+                            <input type="file" accept="image/*" style="display:none;" onchange="uploadChecklistImage(event, '${item.id}', ${index}, '${chk.key}')">
+                          </label>
+                        </div>
+
+                        ${itemData.gambar ? `
+                          <div class="img-preview-container">
+                            <img src="${itemData.gambar}" class="img-preview">
+                            <button class="btn-remove-img" onclick="removeChecklistImage('${item.id}', ${index}, '${chk.key}')" title="Padam Gambar">✖</button>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            });
+
+            formHTML += `
+              <div class="door-card">
+                <div class="door-card-title">PINTU ${index + 1}</div>
+                <div class="form-group">
+                  <label>Nama Penghuni:</label>
+                  <input type="text" value="${escapeHtml(door.nama || '')}" maxlength="50" placeholder="Nama pekerja..." onchange="updateDoorData('${item.id}', ${index}, 'nama', this.value)">
+                </div>
+                <div class="form-group">
+                  <label>Jumlah Penghuni:</label>
+                  <input type="number" min="0" max="20" value="${escapeHtml(door.jumlah || '1')}" onchange="updateDoorData('${item.id}', ${index}, 'jumlah', this.value)">
+                </div>
+                <div class="checklist-title">Rekod Kelengkapan & Penggantian:</div>
+                ${checklistHTML}
+              </div>
+            `;
+          });
+        }
+      } else if (item.type === 'road') {
+        formHTML = `
+          <button class="btn-action btn-pdf" onclick="exportPDF('${item.id}')">📄 Eksport PDF Jalan Ini</button>
+        `;
+      }
+
+      formHTML += `<button class="btn-action btn-delete" onclick="deleteElement('${item.id}')">🗑️ Padam Elemen</button>`;
+      document.getElementById('sidebarContent').innerHTML = formHTML;
+    }
+
+    function updateDoorData(id, doorIndex, field, value) {
+      const item = elements.find(e => e.id === id);
+      if (item && item.doors && item.doors[doorIndex]) {
+        item.doors[doorIndex][field] = value.trim();
+        saveDoor(id, doorIndex, item.doors[doorIndex]);
+      }
+    }
+
+    function updateChecklistStatus(id, doorIndex, key, checked) {
+      const item = elements.find(e => e.id === id);
+      if (item && item.doors && item.doors[doorIndex]) {
+        if (!item.doors[doorIndex].checklist[key]) {
+          item.doors[doorIndex].checklist[key] = { status: false, tarikh: '', gambar: '' };
+        }
+        item.doors[doorIndex].checklist[key].status = checked;
+        saveDoor(id, doorIndex, item.doors[doorIndex]);
+        renderSidebarForm(id);
+      }
+    }
+
+    function updateChecklistDate(id, doorIndex, key, dateVal) {
+      const item = elements.find(e => e.id === id);
+      if (item && item.doors && item.doors[doorIndex] && item.doors[doorIndex].checklist[key]) {
+        item.doors[doorIndex].checklist[key].tarikh = dateVal;
+        saveDoor(id, doorIndex, item.doors[doorIndex]);
+      }
+    }
+
+    function uploadChecklistImage(e, id, doorIndex, key) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('Sila pilih fail imej sahaja (jpg, png, dsb).');
+        e.target.value = '';
+        return;
+      }
+      if (file.size > MAX_UPLOAD_FILE_BYTES) {
+        alert('Saiz fail terlalu besar. Sila pilih imej di bawah 20MB.');
+        e.target.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function(evt) {
+        try {
+          // Downscale/compress, then store directly in the door's Firestore
+          // document (no Cloud Storage needed).
+          const compressed = await compressImageSource(evt.target.result);
+          const item = elements.find(el => el.id === id);
+          if (item && item.doors && item.doors[doorIndex] && item.doors[doorIndex].checklist[key]) {
+            item.doors[doorIndex].checklist[key].gambar = compressed;
+            saveDoor(id, doorIndex, item.doors[doorIndex]);
+            renderSidebarForm(id);
+          }
+        } catch (err) {
+          alert('Gagal memproses imej: ' + err.message);
+        } finally {
+          e.target.value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeChecklistImage(id, doorIndex, key) {
+      const item = elements.find(el => el.id === id);
+      if (item && item.doors && item.doors[doorIndex] && item.doors[doorIndex].checklist[key]) {
+        item.doors[doorIndex].checklist[key].gambar = '';
+        saveDoor(id, doorIndex, item.doors[doorIndex]);
+        renderSidebarForm(id);
+      }
+    }
+
+    function openCameraModal(id, doorIndex, key) {
+      activeCamTarget = { houseId: id, doorIndex: doorIndex, key: key };
+      const modal = document.getElementById('camera-modal');
+      const video = document.getElementById('camera-video');
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Kamera tidak tersedia dalam pelayar ini. Ini biasanya berlaku jika fail dibuka terus (file://) - sila buka fail ini melalui pautan web (https://) untuk guna kamera, atau gunakan butang "Muat Naik Gambar" untuk pilih dari galeri.');
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => {
+          cameraStream = stream;
+          video.srcObject = stream;
+          modal.style.display = 'flex';
+        })
+        .catch(err => {
+          alert('Gagal mengakses kamera: ' + err.message + '\n\nPetua: guna butang "Muat Naik Gambar" untuk pilih terus dari galeri sebagai alternatif.');
+        });
+    }
+
+    function closeCameraModal() {
+      const modal = document.getElementById('camera-modal');
+      modal.style.display = 'none';
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+      }
+    }
+
+    async function takePicture() {
+      const video = document.getElementById('camera-video');
+      let width = video.videoWidth || 640;
+      let height = video.videoHeight || 480;
+      if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+        const scale = MAX_IMAGE_DIMENSION / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, width, height);
+
+      const dataUri = canvas.toDataURL('image/jpeg', IMAGE_QUALITY);
+      const { houseId, doorIndex, key } = activeCamTarget;
+      closeCameraModal();
+
+      const item = elements.find(el => el.id === houseId);
+      if (item && item.doors && item.doors[doorIndex] && item.doors[doorIndex].checklist[key]) {
+        item.doors[doorIndex].checklist[key].gambar = dataUri;
+        saveDoor(houseId, doorIndex, item.doors[doorIndex]);
+        renderSidebarForm(houseId);
+      }
+    }
+
+    function deleteElement(id) {
+      if (isLayoutLocked) {
+        alert("Layout sedang terkunci. Sila buka kunci (🔓) terlebih dahulu untuk memadam elemen.");
+        return;
+      }
+      if (confirm('Adakah anda pasti mahu memadamkan elemen ini?')) {
+        elements = elements.filter(e => e.id !== id);
+        buildingsRaw = buildingsRaw.filter(e => e.id !== id);
+        delete doorsByBuilding[id];
+        selectedId = null;
+
+        const batch = db.batch();
+        batch.delete(db.collection(ELEMENTS_COLLECTION).doc(id));
+        for (let i = 0; i < DOOR_COUNT; i++) {
+          batch.delete(db.collection(DOORS_COLLECTION).doc(`${id}_d${i}`));
+        }
+        batch.commit().catch(err => alert('Gagal padam di pelayan: ' + err.message));
+
+        renderCanvas();
+        closeSidebar();
+      }
+    }
+
+    function searchElements() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      if (!query) {
+        renderCanvas();
+        return;
+      }
+
+      elements.forEach(item => {
+        let match = false;
+        const config = CATEGORY_CONFIG[item.category];
+        if (config && config.label.toLowerCase().includes(query)) match = true;
+
+        if (item.doors) {
+          item.doors.forEach(d => {
+            if (d.nama && d.nama.toLowerCase().includes(query)) match = true;
+          });
+        }
+        
+        const el = viewport.querySelector(`[data-id="${CSS.escape(item.id)}"]`);
+        if (el) {
+          if (match) {
+            el.style.border = '3px solid #EF4444';
+            el.style.boxShadow = '0 0 15px #EF4444';
+          } else {
+            el.style.border = '2px solid transparent';
+            el.style.boxShadow = '0 4px 10px rgba(0,0,0,0.3)';
+          }
+        }
+      });
+    }
+
+    // Extracts {x,y} from either a MouseEvent or a TouchEvent.
+    function getPoint(e) {
+      if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      if (e.changedTouches && e.changedTouches.length) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    // Wires up a mousedown+touchstart pair that shares the same drag logic.
+    // onStart(e) runs on press; return { onMove, onEnd } to begin tracking,
+    // or a falsy value to ignore this press (e.g. layout locked).
+    function bindDragHandlers(startEl, onStart) {
+      function down(e) {
+        const result = onStart(e);
+        if (!result) return;
+        const { onMove, onEnd } = result;
+
+        function moveHandler(ev) { onMove(ev); }
+        function endHandler(ev) {
+          window.removeEventListener('mousemove', moveHandler);
+          window.removeEventListener('mouseup', endHandler);
+          window.removeEventListener('touchmove', moveHandler);
+          window.removeEventListener('touchend', endHandler);
+          window.removeEventListener('touchcancel', endHandler);
+          onEnd(ev);
+        }
+
+        window.addEventListener('mousemove', moveHandler);
+        window.addEventListener('mouseup', endHandler);
+        window.addEventListener('touchmove', moveHandler, { passive: false });
+        window.addEventListener('touchend', endHandler);
+        window.addEventListener('touchcancel', endHandler);
+      }
+      startEl.addEventListener('mousedown', down);
+      startEl.addEventListener('touchstart', down, { passive: false });
+    }
+
+    function makeDraggableResizableRotatable(el, resizeHandle, rotateHandle, item) {
+      // Drag
+      bindDragHandlers(el, (e) => {
+        if (e.target === resizeHandle || e.target === rotateHandle || isLayoutLocked) return null;
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+
+        const p0 = getPoint(e);
+        const startLeft = item.x;
+        const startTop = item.y;
+        el.classList.add('dragging');
+
+        return {
+          onMove(ev) {
+            if (ev.cancelable) ev.preventDefault();
+            const p = getPoint(ev);
+            const dx = (p.x - p0.x) / zoomLevel;
+            const dy = (p.y - p0.y) / zoomLevel;
+
+            item.x = snapToGrid(startLeft + dx);
+            item.y = snapToGrid(startTop + dy);
+
+            el.style.left = item.x + 'px';
+            el.style.top = item.y + 'px';
+          },
+          onEnd() {
+            el.classList.remove('dragging');
+            saveElement(item);
+          }
+        };
+      });
+
+      // Resize
+      bindDragHandlers(resizeHandle, (e) => {
+        if (isLayoutLocked) return null;
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+
+        const p0 = getPoint(e);
+        const startW = item.w;
+        const startH = item.h;
+        el.classList.add('resizing');
+
+        return {
+          onMove(ev) {
+            if (ev.cancelable) ev.preventDefault();
+            const p = getPoint(ev);
+            const dx = (p.x - p0.x) / zoomLevel;
+            const dy = (p.y - p0.y) / zoomLevel;
+
+            item.w = Math.max(GRID_SIZE * 2, snapToGrid(startW + dx));
+            item.h = Math.max(GRID_SIZE * 2, snapToGrid(startH + dy));
+
+            el.style.width = item.w + 'px';
+            el.style.height = item.h + 'px';
+          },
+          onEnd() {
+            el.classList.remove('resizing');
+            saveElement(item);
+          }
+        };
+      });
+
+      // Rotate
+      bindDragHandlers(rotateHandle, (e) => {
+        if (isLayoutLocked) return null;
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        el.classList.add('rotating');
+
+        const rect = el.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        return {
+          onMove(ev) {
+            if (ev.cancelable) ev.preventDefault();
+            const p = getPoint(ev);
+            const radians = Math.atan2(p.x - centerX, -(p.y - centerY));
+            let degrees = Math.round(radians * (180 / Math.PI));
+
+            if (ev.shiftKey) {
+              degrees = Math.round(degrees / 15) * 15;
+            }
+
+            item.rotation = degrees;
+            el.style.transform = `rotate(${degrees}deg)`;
+          },
+          onEnd() {
+            el.classList.remove('rotating');
+            saveElement(item);
+          }
+        };
+      });
+    }
+
+    /* FUNCTION EXPORT PDF DENGAN MAP DAH DIKEMAS KINI */
+    async function exportPDF(targetId) {
+      loadingOverlay.style.display = 'flex';
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      try {
+        // 1. TANGKAP GAMBAR MAP / CANVAS
+        const canvasContainer = document.getElementById('canvas-container');
+        
+        // Nyahaktifkan sementara kawalan aktif visual supaya border/handle tak termasuk dalam PDF
+        const activeElem = document.querySelector('.element-box.active');
+        if (activeElem) activeElem.classList.remove('active');
+
+        const canvasMap = await html2canvas(canvasContainer, {
+          scale: 2, // Resolusi tinggi
+          useCORS: true,
+          backgroundColor: '#1E293B',
+          ignoreElements: (element) => element.classList.contains('toolbar') // Abai toolbar dalam gambar
+        });
+        
+        if (activeElem && selectedId) activeElem.classList.add('active');
+
+        const mapImgData = canvasMap.toDataURL('image/png');
+
+        // 2. MASUKKAN GAMBAR MAP KE HALAMAN PERTAMA PDF
+        pdf.setFontSize(16);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text("Pelan / Layout Visual Tapak LP2", 14, 15);
+
+        pdf.setFontSize(9);
+        pdf.setTextColor(100);
+        pdf.text(`Tarikh Cetakan: ${new Date().toLocaleDateString('ms-MY')}`, 14, 21);
+
+        const imgWidth = 180;
+        const imgHeight = (canvasMap.height * imgWidth) / canvasMap.width;
+        pdf.addImage(mapImgData, 'PNG', 14, 25, imgWidth, Math.min(imgHeight, 140));
+
+        // 3. SELEKSI REKOD
+        let exportList = [];
+        if (targetId === 'all') {
+          exportList = elements;
+        } else {
+          const single = elements.find(e => e.id === targetId);
+          if (single) exportList = [single];
+        }
+
+        // 4. PENJANAAN REKOD DATA
+        if (exportList.length > 0) {
+          pdf.addPage(); // Halaman baharu untuk senarai rekod
+
+          for (let i = 0; i < exportList.length; i++) {
+            if (i > 0) pdf.addPage();
+
+            const item = exportList[i];
+            const config = CATEGORY_CONFIG[item.category];
+            const labelText = config ? config.label : 'Jalan Utama';
+
+            pdf.setFontSize(14);
+            pdf.setTextColor(15, 23, 42);
+            pdf.text(`Laporan Rekod: ${labelText}`, 14, 18);
+
+            pdf.setFontSize(10);
+            pdf.setTextColor(100);
+            pdf.text(`Jenis: ${item.category || item.type}`, 14, 25);
+
+            let startY = 35;
+
+            if (item.category === 'pekerja' && item.doors) {
+              item.doors.forEach((door, index) => {
+                if (startY > 260) {
+                  pdf.addPage();
+                  startY = 20;
+                }
+
+                pdf.setFontSize(11);
+                pdf.setTextColor(16, 185, 129);
+                pdf.text(`Pintu ${index + 1} - Penghuni: ${door.nama || 'Tiada'} (${door.jumlah || 0} Orang)`, 14, startY);
+                startY += 6;
+
+                pdf.setFontSize(9);
+                pdf.setTextColor(50);
+
+                let hasItems = false;
+                ITEMS_CHECKLIST.forEach(chk => {
+                  const chkData = door.checklist ? door.checklist[chk.key] : null;
+                  if (chkData && chkData.status) {
+                    hasItems = true;
+                    pdf.text(`• ${chk.label} - Tarikh: ${chkData.tarikh || 'N/A'}`, 18, startY);
+                    startY += 5;
+                  }
+                });
+
+                if (!hasItems) {
+                  pdf.text(`• Tiada rekod kelengkapan.`, 18, startY);
+                  startY += 5;
+                }
+
+                startY += 4;
+              });
+            } else {
+              pdf.setFontSize(10);
+              pdf.text(`Tiada perincian pintu untuk elemen ini.`, 14, startY);
+            }
+          }
+        }
+
+        pdf.save(`Laporan_LP2_Bersama_Map_${Date.now()}.pdf`);
+      } catch (err) {
+        alert("Gagal menjana PDF: " + err.message);
+      } finally {
+        loadingOverlay.style.display = 'none';
+      }
+    }
+
+    // Inisialisasi UI
+    updateLockUI();
+    renderCanvas();
+  </script>
+</body>
+</html>
