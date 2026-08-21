@@ -3,7 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pengurusan Rumah Pekerja</title>
+  <title>Pengurusan Rumah Pekerja - LP2</title>
+
+  <!-- PWA: boleh dipasang sebagai apl (ikon skrin utama, mod full-screen) -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0F172A">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LP2 Pelan">
+  <meta name="mobile-web-app-capable" content="yes">
+
   <!-- Pustaka html2canvas & jsPDF untuk Fungsi Ekstrak PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -58,6 +69,7 @@
     .btn-map-new { background: #22C55E; color: #0F172A; }
     .btn-map-rename { background: #64748B; color: white; padding: 8px 10px; }
     .btn-map-delete { background: #EF4444; color: white; padding: 8px 10px; }
+    .btn-map-pin { background: #64748B; color: white; padding: 8px 10px; }
     .btn-tool {
       border: none; padding: 8px 12px;
       border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;
@@ -304,7 +316,8 @@
         <select id="mapSelector" onchange="onMapSelectorChange(this)"></select>
         <button class="btn-tool btn-map-new" onclick="createNewMap()" title="Cipta peta baru (berasingan sepenuhnya)">➕ Peta Baru</button>
         <button class="btn-tool btn-map-rename" onclick="renameCurrentMap()" title="Namakan semula peta ini">✏️</button>
-        <button class="btn-tool btn-map-delete" onclick="deleteCurrentMap()" title="Padam peta ini">🗑️</button>
+        <button class="btn-tool btn-map-delete" onclick="deleteCurrentMap()" title="Padam peta ini (perlu PIN admin)">🗑️</button>
+        <button class="btn-tool btn-map-pin" onclick="changeDeletePin()" title="Tukar PIN admin untuk padam peta">🔑 PIN</button>
       </div>
 
       <div class="toolbar">
@@ -344,7 +357,7 @@
     <div id="sidebar">
       <div class="sidebar-header">
         <button class="btn-close-sidebar" onclick="closeSidebar()">✖</button>
-        <h2>Pengurusan Pelan</h2>
+        <h2>Pengurusan Pelan LP2</h2>
         <div class="search-box">
           <input type="text" id="searchInput" placeholder="Cari penghuni..." oninput="searchElements()">
         </div>
@@ -385,6 +398,8 @@
     const ELEMENTS_COLLECTION = 'lp2_elements';
     const DOORS_COLLECTION = 'lp2_doors';
     const SETTINGS_COLLECTION = 'lp2_settings';
+    const ADMIN_CONFIG_DOC = ['lp2_settings', 'adminConfig']; // simpan PIN padam peta
+    const DEFAULT_DELETE_PIN = '1234'; // digunakan sekali sahaja jika belum pernah ditetapkan
     const DOOR_DOC_SAFE_BYTES = 900000; // amaran sebelum menghampiri had 1MB Firestore
     const LAST_MAP_KEY = 'lp2_lastMapId'; // ingatan tempatan (peranti ini sahaja)
 
@@ -670,11 +685,64 @@
         .catch(err => alert('Gagal menamakan semula: ' + err.message));
     }
 
+    // Mengembalikan PIN admin semasa (untuk kelulusan padam peta). Jika
+    // belum pernah ditetapkan, cipta satu secara automatik menggunakan
+    // DEFAULT_DELETE_PIN supaya ciri ini terus berfungsi tanpa persediaan
+    // tambahan - admin patut tukar PIN lalai ini secepat mungkin melalui
+    // butang "🔑 PIN".
+    async function getDeletePin() {
+      const ref = db.collection(ADMIN_CONFIG_DOC[0]).doc(ADMIN_CONFIG_DOC[1]);
+      const doc = await ref.get();
+      if (doc.exists && doc.data().deletePin) {
+        return doc.data().deletePin;
+      }
+      await ref.set({ deletePin: DEFAULT_DELETE_PIN }, { merge: true });
+      return DEFAULT_DELETE_PIN;
+    }
+
+    async function changeDeletePin() {
+      try {
+        const currentPin = await getDeletePin();
+        const enteredCurrent = prompt('Masukkan PIN admin semasa untuk mengesahkan:');
+        if (enteredCurrent === null) return;
+        if (enteredCurrent !== currentPin) {
+          alert('PIN semasa tidak tepat.');
+          return;
+        }
+        const newPin = prompt('Masukkan PIN admin BARU (sekurang-kurangnya 4 aksara):');
+        if (newPin === null) return;
+        if (!newPin.trim() || newPin.trim().length < 4) {
+          alert('PIN baru mestilah sekurang-kurangnya 4 aksara.');
+          return;
+        }
+        await db.collection(ADMIN_CONFIG_DOC[0]).doc(ADMIN_CONFIG_DOC[1])
+          .set({ deletePin: newPin.trim() }, { merge: true });
+        alert('PIN admin berjaya dikemaskini.');
+      } catch (err) {
+        alert('Gagal menukar PIN: ' + err.message);
+      }
+    }
+
     async function deleteCurrentMap() {
       if (mapsList.length <= 1) {
         alert('Tidak boleh memadam peta terakhir. Cipta peta lain dahulu sebelum memadam peta ini.');
         return;
       }
+
+      let correctPin;
+      try {
+        correctPin = await getDeletePin();
+      } catch (err) {
+        alert('Gagal menyemak PIN: ' + err.message);
+        return;
+      }
+      const enteredPin = prompt('Padam peta memerlukan PIN admin. Sila masukkan PIN:');
+      if (enteredPin === null) return; // dibatalkan
+      if (enteredPin !== correctPin) {
+        alert('PIN salah. Peta tidak dipadam.');
+        return;
+      }
+
       const current = mapsList.find(m => m.id === currentMapId);
       const confirmed = confirm(
         `Padam peta "${current ? current.name : ''}" beserta SEMUA bangunan, pintu, dan gambar di dalamnya? Tindakan ini tidak boleh dibatalkan.`
@@ -1626,6 +1694,15 @@
     // Inisialisasi UI
     updateLockUI();
     renderCanvas();
+
+    // Daftar service worker (jadikan apl ini boleh "dipasang" pada
+    // skrin utama telefon). Gagal senyap jika tidak disokong / fail
+    // dibuka terus (file://) - apl tetap berfungsi seperti biasa.
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
   </script>
 </body>
 </html>
