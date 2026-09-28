@@ -86,7 +86,7 @@
       border-radius: 999px; margin-top: 4px; margin-left: 6px; background: #450A0A;
       color: #FCA5A5; border: 1px solid #EF4444;
     }
-    .building-card.has-defect { border-left-color: #EF4444; }
+    .building-card.has-defect { border-left-color: #EF4444; border-color: #7F1D1D; }
 
     .fab-add {
       position: absolute; bottom: 24px; right: 24px; width: 52px; height: 52px;
@@ -152,7 +152,6 @@
       text-align: center; flex-direction: column; padding: 4px;
       transform-origin: center center;
       transition: left 0.15s ease-out, top 0.15s ease-out, width 0.15s ease-out, height 0.15s ease-out, transform 0.15s ease-out;
-      touch-action: none;
     }
     .element-box.is-locked { cursor: pointer !important; }
     .element-box.dragging, .element-box.resizing, .element-box.rotating { transition: none !important; }
@@ -165,41 +164,38 @@
     .type-surau { background: #059669; color: #FFFFFF; border-color: #34D399; }
     .type-road { background: #475569; color: #CBD5E1; border-color: #94A3B8; flex-direction: row; }
 
-    .element-box.has-defect { border-color: #EF4444; animation: defectPulse 1.6s ease-in-out infinite; }
-    @keyframes defectPulse {
-      0%, 100% { box-shadow: 0 0 6px #EF4444, 0 4px 10px rgba(0,0,0,0.3); }
-      50% { box-shadow: 0 0 22px 4px #EF4444, 0 4px 10px rgba(0,0,0,0.3); }
-    }
     .element-box.active { border-color: #FFFFFF !important; box-shadow: 0 0 14px #FFFFFF; }
     .element-box.has-defect { border-color: #EF4444; box-shadow: 0 0 12px rgba(239,68,68,0.8); }
     .element-box.has-defect.active { box-shadow: 0 0 14px #FFFFFF, 0 0 20px rgba(239,68,68,0.9); }
+    
     .defect-badge {
       position: absolute; top: -9px; right: -9px; background: #EF4444; color: white;
       width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.5); border: 2px solid #0F172A;
       animation: defectPulse 1.4s ease-in-out infinite; z-index: 5;
     }
+    @keyframes defectPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 
     .resize-handle {
-      position: absolute; right: -10px; bottom: -10px;
-      width: 22px; height: 22px; background-color: #FFFFFF;
-      border: 2px solid #0F172A; border-radius: 4px;
-      cursor: nwse-resize; display: none; touch-action: none;
+      position: absolute; right: -5px; bottom: -5px;
+      width: 12px; height: 12px; background-color: #FFFFFF;
+      border: 2px solid #0F172A; border-radius: 2px;
+      cursor: nwse-resize; display: none;
     }
     .rotate-handle {
-      position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
-      width: 24px; height: 24px; background-color: #38BDF8;
+      position: absolute; top: -25px; left: 50%; transform: translateX(-50%);
+      width: 16px; height: 16px; background-color: #38BDF8;
       border: 2px solid #FFFFFF; border-radius: 50%;
-      cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4); touch-action: none;
+      cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     }
     .rotate-handle::after {
-      content: ''; position: absolute; top: 20px; left: 9px;
-      width: 2px; height: 10px; background-color: #38BDF8;
+      content: ''; position: absolute; top: 14px; left: 5px;
+      width: 2px; height: 8px; background-color: #38BDF8;
     }
     .element-box.active:not(.is-locked) .resize-handle,
     .element-box.active:not(.is-locked) .rotate-handle { display: block; }
 
-    /* ===== Modal shell ===== */
+    /* ===== Modal Shell ===== */
     .modal-backdrop {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.75); z-index: 300;
@@ -228,11 +224,10 @@
     .btn-close-modal:hover { color: #EF4444; }
     .modal-body { flex: 1; overflow-y: auto; padding: 16px; }
 
-    /* Add modal grid */
     .add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .add-grid button { padding: 16px 10px; font-size: 13px; }
 
-    /* Form Styles & Checklist Grid */
+    /* Form Styles */
     .form-group { margin-bottom: 10px; }
     .form-group label { display: block; font-size: 11px; color: #CBD5E1; margin-bottom: 4px; }
     .form-group input, .form-group select {
@@ -264,7 +259,7 @@
       display: flex; align-items: center; justify-content: space-between; gap: 6px;
       font-size: 11px; color: #E2E8F0; font-weight: bold;
     }
-    .item-header input[type="checkbox"] { width: 16px; height: 16px; accent-color: #10B981; cursor: pointer; }
+    .item-header input[type="checkbox"] { width: 14px; height: 14px; accent-color: #10B981; cursor: pointer; }
     .item-details {
       margin-top: 6px; padding-top: 6px; border-top: 1px dashed #334155;
       display: flex; flex-direction: column; gap: 6px;
@@ -296,7 +291,7 @@
     .btn-pdf { background: #0284C7; color: white; }
     .btn-delete { background: #EF4444; color: white; }
 
-    /* Modal Kamera Direct Stream */
+    /* Kamera Modal */
     #camera-modal {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.95); z-index: 1000;
@@ -310,7 +305,7 @@
     .btn-capture { flex: 1; padding: 12px; background: #10B981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
     .btn-cancel-cam { flex: 1; padding: 12px; background: #EF4444; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
-    /* Login overlay + sync status */
+    /* Login & Status */
     #login-overlay {
       display: flex; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: #0F172A; z-index: 2000; align-items: center; justify-content: center; padding: 20px;
@@ -363,7 +358,7 @@
   </div>
 
   <div id="loading-overlay">
-    <div style="font-size: 18px; margin-bottom: 10px;">📄 Menyedia & Tangkap Map Ke PDF...</div>
+    <div style="font-size: 18px; margin-bottom: 10px;">📄 Menyedia, Mengorientasi & Tangkap Map Ke PDF...</div>
     <div style="font-size: 12px; color: #94A3B8;">Sila tunggu sebentar.</div>
   </div>
 
@@ -497,7 +492,6 @@
     let panX = 0, panY = 0, zoomLevel = 1.0;
     const MIN_ZOOM = 0.2, MAX_ZOOM = 3.0;
     let isPanning = false, startPanX = 0, startPanY = 0;
-    let touchStartDist = 0;
 
     const container = document.getElementById('canvas-container');
     const viewport = document.getElementById('canvas-viewport');
@@ -555,14 +549,6 @@
 
     function escapeHTML(str) {
       return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    }
-
-    /* Helper: Returns position coordinates regardless of mouse vs touch events */
-    function getPointerPos(e) {
-      if (e.touches && e.touches.length > 0) {
-        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      }
-      return { x: e.clientX, y: e.clientY };
     }
 
     /* ===================== VIEW SWITCHING ===================== */
@@ -832,7 +818,7 @@
     function initFirebase() {
       const loginMsg = document.getElementById('loginMessage');
       if (firebaseConfig.apiKey.startsWith('PASTE') || firebaseConfig.appId.startsWith('PASTE')) {
-        loginMsg.innerHTML = '⚙️ <b>Firebase belum disambung.</b><br>Buka fail ini dan gantikan config Firebase anda.';
+        loginMsg.innerHTML = '⚙️ <b>Firebase belum disambung.</b><br>Sila kemaskini <code>firebaseConfig</code>.';
         document.getElementById('loginForm').style.display = 'none';
         return;
       }
@@ -849,6 +835,7 @@
       });
     }
 
+    /* ===================== IMPORT DATA LAMA ===================== */
     function getLegacyLocal() {
       if (localStorage.getItem('firebaseImported_v1')) return [];
       const seen = new Set(), out = [];
@@ -866,11 +853,9 @@
       });
       return out;
     }
-
     function refreshImportButton() {
       document.getElementById('btnImportLocal').style.display = getLegacyLocal().length > 0 ? 'inline-block' : 'none';
     }
-
     async function importLegacyLocal(skipConfirm) {
       const legacy = getLegacyLocal();
       if (!legacy.length || !dbReady) return;
@@ -906,7 +891,6 @@
         loadingOverlay.style.display = 'none';
       }
     }
-
     function saveToStorageLockedState() {
       localStorage.setItem('myLayoutLocked_v6', JSON.stringify(isLayoutLocked));
     }
@@ -1033,7 +1017,11 @@
 
     function renderList() {
       const filtered = elements.filter(item => {
-        if (activeFilter !== 'semua' && item.category !== activeFilter) return false;
+        if (activeFilter === 'defect') {
+          if (countDefects(item) === 0) return false;
+        } else if (activeFilter !== 'semua' && item.category !== activeFilter) {
+          return false;
+        }
         return matchesSearch(item);
       });
 
@@ -1045,13 +1033,14 @@
       listScroll.innerHTML = filtered.map(item => {
         const config = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG.pekerja;
         const summary = occupancySummary(item);
+        const defects = countDefects(item);
         return `
-          <div class="building-card ${countDefects(item) > 0 ? 'has-defect' : ''}" onclick="openDetailModal('${item.id}')">
+          <div class="building-card ${defects > 0 ? 'has-defect' : ''}" onclick="openDetailModal('${item.id}')">
             <div class="card-icon">${config.icon}</div>
             <div class="card-main">
               <div class="card-title">${escapeHTML(item.name || config.label)}</div>
               <div class="card-sub">${escapeHTML(config.label)}${item.category === 'pekerja' ? ` • ${item.doors.length} Pintu` : ''}</div>
-              ${summary ? `<span class="occupancy-pill">${summary}</span>` : ''}${countDefects(item) > 0 ? `<span class="defect-pill">⚠️ ${countDefects(item)} kerosakan</span>` : ''}
+              ${summary ? `<span class="occupancy-pill">${summary}</span>` : ''}${defects > 0 ? `<span class="defect-pill">⚠️ ${defects} kerosakan</span>` : ''}
             </div>
             <div class="card-chevron">›</div>
           </div>
@@ -1081,7 +1070,50 @@
       viewport.style.backgroundSize = `${20 * zoomLevel}px ${20 * zoomLevel}px`;
       zoomValDisplay.textContent = `${Math.round(zoomLevel * 100)}%`;
     }
-    function resetView() { panX = 0; panY = 0; zoomLevel = 1.0; updateViewportTransform(); }
+    function resetView() {
+      if (!elements || elements.length === 0) {
+        panX = 0; panY = 0; zoomLevel = 1.0;
+        updateViewportTransform();
+        return;
+      }
+
+      let minX = Infinity, minY = Infinity;
+      let maxX = -Infinity, maxY = -Infinity;
+
+      elements.forEach(el => {
+        const x = el.x || 0;
+        const y = el.y || 0;
+        const w = el.w || GRID_SIZE * 2;
+        const h = el.h || GRID_SIZE * 2;
+
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x + w > maxX) maxX = x + w;
+        if (y + h > maxY) maxY = y + h;
+      });
+
+      const padding = 60;
+      const contentWidth = (maxX - minX) + padding * 2;
+      const contentHeight = (maxY - minY) + padding * 2;
+
+      const containerWidth = container.clientWidth || window.innerWidth;
+      const containerHeight = container.clientHeight || window.innerHeight;
+
+      const scaleX = containerWidth / contentWidth;
+      const scaleY = containerHeight / contentHeight;
+      let calculatedZoom = Math.min(scaleX, scaleY);
+
+      calculatedZoom = Math.min(Math.max(calculatedZoom, MIN_ZOOM), 1.2);
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      panX = (containerWidth / 2) - (centerX * calculatedZoom);
+      panY = (containerHeight / 2) - (centerY * calculatedZoom);
+      zoomLevel = calculatedZoom;
+
+      updateViewportTransform();
+    }
     function setZoom(newZoom, centerX = window.innerWidth / 2, centerY = window.innerHeight / 2) {
       const clampedZoom = Math.min(Math.max(newZoom, MIN_ZOOM), MAX_ZOOM);
       if (clampedZoom === zoomLevel) return;
@@ -1101,62 +1133,22 @@
       setZoom(zoomLevel + delta, e.clientX, e.clientY);
     }, { passive: false });
 
-    /* Unified Touch / Mouse Panning & Pinch Zooming */
-    function startPan(e) {
+    container.addEventListener('mousedown', (e) => {
       if (e.target === container || e.target === viewport) {
-        if (e.touches && e.touches.length === 2) {
-          isPanning = false;
-          touchStartDist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-          );
-          return;
-        }
         isPanning = true;
-        const pos = getPointerPos(e);
-        startPanX = pos.x - panX;
-        startPanY = pos.y - panY;
+        startPanX = e.clientX - panX;
+        startPanY = e.clientY - panY;
         selectedId = null;
         renderCanvas();
       }
-    }
-
-    function movePan(e) {
-      if (e.touches && e.touches.length === 2) {
-        const dist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY
-        );
-        if (touchStartDist > 0) {
-          const factor = dist / touchStartDist;
-          const center = {
-            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-          };
-          setZoom(zoomLevel * factor, center.x, center.y);
-          touchStartDist = dist;
-        }
-        return;
-      }
+    });
+    window.addEventListener('mousemove', (e) => {
       if (!isPanning) return;
-      const pos = getPointerPos(e);
-      panX = pos.x - startPanX;
-      panY = pos.y - startPanY;
+      panX = e.clientX - startPanX;
+      panY = e.clientY - startPanY;
       updateViewportTransform();
-    }
-
-    function endPan() {
-      isPanning = false;
-      touchStartDist = 0;
-    }
-
-    container.addEventListener('mousedown', startPan);
-    window.addEventListener('mousemove', movePan);
-    window.addEventListener('mouseup', endPan);
-
-    container.addEventListener('touchstart', startPan, { passive: false });
-    window.addEventListener('touchmove', movePan, { passive: false });
-    window.addEventListener('touchend', endPan);
+    });
+    window.addEventListener('mouseup', () => { isPanning = false; });
 
     function renderCanvas() {
       viewport.innerHTML = '';
@@ -1169,7 +1161,7 @@
           const defectCount = countDefects(item);
           div.className = `element-box ${config.colorClass} ${item.id === selectedId ? 'active' : ''} ${defectCount > 0 ? 'has-defect' : ''} ${lockClass}`;
           const doorLabel = item.category === 'pekerja' ? `<div style="font-size:10px; font-weight:normal;">(${(item.doors && item.doors.length) || item.doorCount || 6} Pintu)</div>` : '';
-          const defectBadge = defectCount > 0 ? `<div class="defect-badge">⚠️ ${defectCount}</div>` : '';
+          const defectBadge = defectCount > 0 ? `<div class="defect-badge">!</div>` : '';
           div.innerHTML = `<div>${config.icon} ${escapeHTML(item.name || config.label)}</div>${doorLabel}${defectBadge}`;
         } else {
           div.className = `element-box type-road ${item.id === selectedId ? 'active' : ''} ${lockClass}`;
@@ -1189,7 +1181,7 @@
 
         const rotateHandle = document.createElement('div');
         rotateHandle.className = 'rotate-handle';
-        rotateHandle.title = "Klik & seret untuk putar";
+        rotateHandle.title = "Klik & seret untuk putar (Pegang Shift untuk snap 15°)";
         div.appendChild(rotateHandle);
 
         makeDraggableResizableRotatable(div, resizeHandle, rotateHandle, item);
@@ -1214,86 +1206,67 @@
         if (match) {
           el.style.border = '3px solid #FACC15';
           el.style.boxShadow = '0 0 15px #FACC15';
-          el.style.animation = 'none';
         } else {
           el.style.border = '';
           el.style.boxShadow = '';
-          el.style.animation = '';
         }
       });
     }
 
-    /* Mobile-Compatible Drag, Resize, and Rotate Handlers */
     function makeDraggableResizableRotatable(el, resizeHandle, rotateHandle, item) {
       let startX, startY, startLeft, startTop;
 
-      function startDrag(e) {
+      el.addEventListener('mousedown', (e) => {
         if (e.target === resizeHandle || e.target === rotateHandle || isLayoutLocked) return;
         e.stopPropagation();
         el.classList.add('dragging');
-        const pos = getPointerPos(e);
-        startX = pos.x; startY = pos.y;
+        startX = e.clientX; startY = e.clientY;
         startLeft = item.x; startTop = item.y;
 
-        function onMove(e) {
-          const currentPos = getPointerPos(e);
-          const dx = (currentPos.x - startX) / zoomLevel;
-          const dy = (currentPos.y - startY) / zoomLevel;
+        function onMouseMove(e) {
+          const dx = (e.clientX - startX) / zoomLevel;
+          const dy = (e.clientY - startY) / zoomLevel;
           item.x = snapToGrid(startLeft + dx);
           item.y = snapToGrid(startTop + dy);
           el.style.left = item.x + 'px';
           el.style.top = item.y + 'px';
         }
-
-        function onEnd() {
+        function onMouseUp() {
           el.classList.remove('dragging');
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('mouseup', onEnd);
-          window.removeEventListener('touchmove', onMove);
-          window.removeEventListener('touchend', onEnd);
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
           saveToStorage();
         }
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
 
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onEnd);
-        window.addEventListener('touchmove', onMove, { passive: false });
-        window.addEventListener('touchend', onEnd);
-      }
-
-      function startResize(e) {
+      resizeHandle.addEventListener('mousedown', (e) => {
         if (isLayoutLocked) return;
         e.stopPropagation();
         el.classList.add('resizing');
-        const pos = getPointerPos(e);
-        startX = pos.x; startY = pos.y;
+        startX = e.clientX; startY = e.clientY;
         const startW = item.w, startH = item.h;
 
-        function onMove(e) {
-          const currentPos = getPointerPos(e);
-          const dx = (currentPos.x - startX) / zoomLevel;
-          const dy = (currentPos.y - startY) / zoomLevel;
+        function onMouseMove(e) {
+          const dx = (e.clientX - startX) / zoomLevel;
+          const dy = (e.clientY - startY) / zoomLevel;
           item.w = Math.max(GRID_SIZE * 2, snapToGrid(startW + dx));
           item.h = Math.max(GRID_SIZE * 2, snapToGrid(startH + dy));
           el.style.width = item.w + 'px';
           el.style.height = item.h + 'px';
         }
-
-        function onEnd() {
+        function onMouseUp() {
           el.classList.remove('resizing');
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('mouseup', onEnd);
-          window.removeEventListener('touchmove', onMove);
-          window.removeEventListener('touchend', onEnd);
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
           saveToStorage();
         }
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
 
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onEnd);
-        window.addEventListener('touchmove', onMove, { passive: false });
-        window.addEventListener('touchend', onEnd);
-      }
-
-      function startRotate(e) {
+      rotateHandle.addEventListener('mousedown', (e) => {
         if (isLayoutLocked) return;
         e.stopPropagation();
         el.classList.add('rotating');
@@ -1301,38 +1274,22 @@
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
 
-        function onMove(e) {
-          const currentPos = getPointerPos(e);
-          const radians = Math.atan2(currentPos.x - centerX, -(currentPos.y - centerY));
+        function onMouseMove(e) {
+          const radians = Math.atan2(e.clientX - centerX, -(e.clientY - centerY));
           let degrees = Math.round(radians * (180 / Math.PI));
           if (e.shiftKey) degrees = Math.round(degrees / 15) * 15;
           item.rotation = degrees;
           el.style.transform = `rotate(${degrees}deg)`;
         }
-
-        function onEnd() {
+        function onMouseUp() {
           el.classList.remove('rotating');
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('mouseup', onEnd);
-          window.removeEventListener('touchmove', onMove);
-          window.removeEventListener('touchend', onEnd);
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
           saveToStorage();
         }
-
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onEnd);
-        window.addEventListener('touchmove', onMove, { passive: false });
-        window.addEventListener('touchend', onEnd);
-      }
-
-      el.addEventListener('mousedown', startDrag);
-      el.addEventListener('touchstart', startDrag, { passive: false });
-
-      resizeHandle.addEventListener('mousedown', startResize);
-      resizeHandle.addEventListener('touchstart', startResize, { passive: false });
-
-      rotateHandle.addEventListener('mousedown', startRotate);
-      rotateHandle.addEventListener('touchstart', startRotate, { passive: false });
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
     }
 
     /* ===================== DETAIL MODAL ===================== */
