@@ -7,6 +7,10 @@
   <!-- Pustaka html2canvas & jsPDF untuk Fungsi Ekstrak PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Firebase (compat SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <style>
     * { box-sizing: border-box; }
@@ -316,6 +320,36 @@
     .btn-capture { flex: 1; padding: 12px; background: #10B981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
     .btn-cancel-cam { flex: 1; padding: 12px; background: #EF4444; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
 
+    /* Login overlay + sync status */
+    #login-overlay {
+      display: flex; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: #0F172A; z-index: 2000; align-items: center; justify-content: center; padding: 20px;
+    }
+    .login-box {
+      background: #1E293B; border: 1px solid #334155; border-radius: 12px;
+      padding: 24px; width: 100%; max-width: 340px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    .login-box h2 { margin: 0 0 4px 0; color: #10B981; font-size: 18px; }
+    .login-box p { margin: 0 0 16px 0; color: #94A3B8; font-size: 12px; line-height: 1.5; }
+    .login-box input {
+      width: 100%; padding: 10px; margin-bottom: 10px; background: #0F172A;
+      border: 1px solid #334155; border-radius: 6px; color: white; font-size: 13px;
+    }
+    .login-box button {
+      width: 100%; padding: 11px; background: #10B981; color: #0F172A; border: none;
+      border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer;
+    }
+    #loginError { color: #F87171; font-size: 12px; margin-top: 10px; min-height: 16px; }
+    #layoutSelect {
+      padding: 7px 8px; background: #1E293B; color: #F8FAFC; border: 1px solid #334155;
+      border-radius: 6px; font-size: 12px; font-weight: bold; max-width: 160px; flex-shrink: 0;
+    }
+    .layout-controls { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+    .btn-mini { padding: 7px 9px !important; }
+    #syncStatus { font-size: 11px; font-weight: bold; color: #94A3B8; white-space: nowrap; flex-shrink: 0; }
+    .btn-header-secondary { background: #334155; color: #E2E8F0; }
+    .btn-import-local { background: #F59E0B; color: #0F172A; display: none; }
+
     #loading-overlay {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.85); z-index: 999;
@@ -324,6 +358,19 @@
   </style>
 </head>
 <body>
+
+  <div id="login-overlay">
+    <div class="login-box">
+      <h2>🏘️ Pengurusan LP2</h2>
+      <p id="loginMessage">Sila log masuk untuk mengakses rekod.</p>
+      <div id="loginForm">
+        <input type="email" id="loginEmail" placeholder="Emel" autocomplete="username">
+        <input type="password" id="loginPassword" placeholder="Kata laluan" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin()">
+        <button onclick="doLogin()">Log Masuk</button>
+      </div>
+      <div id="loginError"></div>
+    </div>
+  </div>
 
   <div id="loading-overlay">
     <div style="font-size: 18px; margin-bottom: 10px;">📄 Menyedia, Mengorientasi & Tangkap Map Ke PDF...</div>
@@ -341,13 +388,22 @@
 
   <div id="app-container">
     <div id="app-header">
-      <h1>🏘️ Pengurusan LP2</h1>
+      <h1>🏘️ Pengurusan</h1>
+      <div class="layout-controls">
+        <select id="layoutSelect" onchange="changeLayout(this.value)" title="Pilih layout"></select>
+        <button class="btn-header-action btn-header-secondary btn-mini" onclick="addLayout()" title="Layout baharu">＋ Layout</button>
+        <button class="btn-header-action btn-header-secondary btn-mini" onclick="renameLayout()" title="Tukar nama layout">✏️</button>
+        <button class="btn-header-action btn-header-secondary btn-mini" onclick="deleteLayout()" title="Padam layout">🗑️</button>
+      </div>
       <div class="view-tabs">
         <button class="view-tab active" id="tabList" onclick="switchView('list')">📋 Senarai</button>
         <button class="view-tab" id="tabMap" onclick="switchView('map')">🗺️ Pelan</button>
       </div>
       <input type="text" id="headerSearch" placeholder="Cari nama pekerja / bangunan..." oninput="onSearchInput()">
+      <span id="syncStatus">☁️ ...</span>
+      <button class="btn-header-action btn-import-local" id="btnImportLocal" onclick="importLegacyLocal()">⬆️ Import Data Lama</button>
       <button class="btn-header-action btn-export-header" onclick="exportPDF('all')">📄 Eksport Semua</button>
+      <button class="btn-header-action btn-header-secondary" onclick="doLogout()">Log Keluar</button>
     </div>
 
     <!-- ===== LIST VIEW ===== -->
@@ -423,7 +479,27 @@
 
   <script>
     const GRID_SIZE = 20;
-    let elements = JSON.parse(localStorage.getItem('myCanvasElements_v6')) || [];
+    /* ===================== FIREBASE CONFIG ===================== */
+    // >>> LENGKAPKAN 2 nilai di bawah (apiKey & appId) daripada Firebase Console:
+    // Project settings -> Your apps -> (web app) -> firebaseConfig
+    const firebaseConfig = {
+      apiKey: "AIzaSyCmc1cccrzh29H6SzWPt84a8rK1x747jU8",
+      authDomain: "estate-perumahan.firebaseapp.com",
+      databaseURL: "https://estate-perumahan-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "estate-perumahan",
+      messagingSenderId: "821767387974",
+      appId: "1:821767387974:web:e933ff358659c498994347"
+    };
+
+    let elements = [];
+    let db = null;
+    let dbReady = false;
+    let lastSaved = {};          // id -> JSON string of what cloud currently has
+    let photoCache = {};         // photoId -> dataURI
+    let firstSnapshotHandled = false;
+    let layouts = {};            // layoutId -> name
+    let currentLayoutId = localStorage.getItem('currentLayoutId_v1') || '';
+    let listeningLayoutId = null;
     let selectedId = null;
     let currentView = localStorage.getItem('myViewMode_v1') || 'list';
     let activeFilter = 'semua';
@@ -524,13 +600,319 @@
     }
 
     /* ===================== STORAGE ===================== */
+    // Saves only the houses that actually changed (one node per house), so two people editing
+    // different houses at the same time don't overwrite each other.
     function saveToStorage() {
-      try {
-        localStorage.setItem('myCanvasElements_v6', JSON.stringify(elements));
-      } catch (e) {
-        if (e.name === 'QuotaExceededError') {
-          alert('Amaran: Storan tempatan penuh! Sila padamkan beberapa gambar bukti untuk menjimatkan ruang.');
+      if (!dbReady || !currentLayoutId) return;
+      const updates = {};
+      const currentIds = new Set();
+      elements.forEach(el => {
+        currentIds.add(el.id);
+        const json = JSON.stringify(el);
+        if (lastSaved[el.id] !== json) {
+          updates['layouts/' + currentLayoutId + '/elements/' + el.id] = JSON.parse(json);
+          lastSaved[el.id] = json;
         }
+      });
+      Object.keys(lastSaved).forEach(id => {
+        if (!currentIds.has(id)) {
+          updates['layouts/' + currentLayoutId + '/elements/' + id] = null;
+          delete lastSaved[id];
+        }
+      });
+      if (Object.keys(updates).length) {
+        db.ref().update(updates).catch(err => alert('Gagal simpan ke Firebase: ' + err.message));
+      }
+    }
+
+    function idTime(id) { return parseInt(String(id).split('_').pop(), 10) || 0; }
+
+    // Realtime Database drops empty arrays/objects, so rebuild them after loading.
+    function normalizeElement(raw) {
+      const el = JSON.parse(JSON.stringify(raw));
+      if (el.type === 'building' && el.category === 'pekerja') {
+        let doors = el.doors || [];
+        if (!Array.isArray(doors)) doors = Object.keys(doors).sort((a, b) => a - b).map(k => doors[k]);
+        el.doors = doors.map(d => {
+          d = d || {};
+          return Object.assign({ label: '', nama: '', jumlah: '1' }, d, { checklist: d.checklist || {}, defects: d.defects || {} });
+        });
+        if (el.doors.length === 0) el.doors = [createDefaultDoor()];
+        el.doorCount = el.doors.length;
+      } else {
+        el.doors = [];
+      }
+      return el;
+    }
+
+    /* ===================== PHOTOS (stored separately from houses) ===================== */
+    function photoSrc(g) {
+      if (!g) return '';
+      return g.startsWith('data:') ? g : (photoCache[g] || '');
+    }
+    function compressImage(dataUri, maxDim = 1024, quality = 0.6) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          let out = c.toDataURL('image/jpeg', quality);
+          if (out.length > 300000) out = c.toDataURL('image/jpeg', 0.45);
+          resolve(out);
+        };
+        img.onerror = () => reject(new Error('Gambar tidak sah'));
+        img.src = dataUri;
+      });
+    }
+    async function storeNewPhoto(dataUri) {
+      const compressed = await compressImage(dataUri);
+      const id = 'p' + Date.now() + Math.random().toString(36).slice(2, 7);
+      await db.ref('photos/' + id).set(compressed);
+      photoCache[id] = compressed;
+      return id;
+    }
+    function deletePhoto(g) {
+      if (g && !g.startsWith('data:') && db) {
+        db.ref('photos/' + g).remove().catch(() => {});
+        delete photoCache[g];
+      }
+    }
+    function collectPhotoIds(doors) {
+      const ids = [];
+      (doors || []).forEach(d => ['checklist', 'defects'].forEach(k => {
+        Object.values(d[k] || {}).forEach(e => { if (e && e.gambar) ids.push(e.gambar); });
+      }));
+      return ids;
+    }
+    function loadMissingPhotos() {
+      document.querySelectorAll('img[data-photo]').forEach(img => {
+        const id = img.dataset.photo;
+        if (photoCache[id]) { img.src = photoCache[id]; return; }
+        db.ref('photos/' + id).once('value').then(snap => {
+          const v = snap.val();
+          if (v) { photoCache[id] = v; img.src = v; }
+        });
+      });
+    }
+
+    /* ===================== LOGIN / SYNC ===================== */
+    function setSyncStatus(ok) {
+      const el = document.getElementById('syncStatus');
+      el.textContent = ok ? '☁️ Tersambung' : '⚠️ Luar talian';
+      el.style.color = ok ? '#34D399' : '#F59E0B';
+    }
+    function doLogin() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const pw = document.getElementById('loginPassword').value;
+      const err = document.getElementById('loginError');
+      err.textContent = '';
+      if (!email || !pw) { err.textContent = 'Sila isi emel dan kata laluan.'; return; }
+      firebase.auth().signInWithEmailAndPassword(email, pw).catch(e => {
+        err.textContent = 'Log masuk gagal: emel atau kata laluan salah.';
+        console.error(e);
+      });
+    }
+    function doLogout() { firebase.auth().signOut(); }
+
+    function startCloudSync() {
+      dbReady = true;
+      db.ref('.info/connected').on('value', s => setSyncStatus(s.val() === true));
+      // One-time move of the old single map (/elements) into a layout called "LP2".
+      Promise.all([db.ref('elements').once('value'), db.ref('layoutNames').once('value')])
+        .then(([legacySnap, namesSnap]) => {
+          if (!namesSnap.val()) {
+            const u = { 'layoutNames/lp2': 'LP2' };
+            const legacy = legacySnap.val();
+            if (legacy) { u['layouts/lp2/elements'] = legacy; u['elements'] = null; }
+            return db.ref().update(u);
+          }
+        })
+        .then(() => {
+          db.ref('layoutNames').on('value', snap => {
+            layouts = snap.val() || {};
+            const ids = Object.keys(layouts);
+            if (!ids.length) return;
+            if (!currentLayoutId || !layouts[currentLayoutId]) {
+              currentLayoutId = ids[0];
+              localStorage.setItem('currentLayoutId_v1', currentLayoutId);
+            }
+            renderLayoutSelect();
+            if (listeningLayoutId !== currentLayoutId) attachElementsListener();
+          }, err => alert('Tiada kebenaran membaca data: ' + err.message));
+        })
+        .catch(err => alert('Gagal sambung ke Firebase: ' + err.message));
+      refreshImportButton();
+    }
+
+    function attachElementsListener() {
+      if (listeningLayoutId) db.ref('layouts/' + listeningLayoutId + '/elements').off();
+      listeningLayoutId = currentLayoutId;
+      elements = []; lastSaved = {}; selectedId = null; firstSnapshotHandled = false;
+      closeDetailModal();
+      resetView();
+      renderAll();
+      db.ref('layouts/' + currentLayoutId + '/elements').on('value', snap => {
+        const val = snap.val() || {};
+        elements = Object.keys(val).map(k => normalizeElement(val[k])).sort((a, b) => idTime(a.id) - idTime(b.id));
+        lastSaved = {};
+        elements.forEach(e => { lastSaved[e.id] = JSON.stringify(e); });
+        if (selectedId && !elements.some(e => e.id === selectedId)) selectedId = null;
+        renderAll();
+        if (!firstSnapshotHandled) {
+          firstSnapshotHandled = true;
+          if (elements.length === 0 && Object.keys(layouts).length === 1 && getLegacyLocal().length > 0) {
+            if (confirm('Layout ini kosong, tetapi ada data lama pada peranti ini. Muat naik ke Firebase sekarang?')) importLegacyLocal(true);
+          }
+        }
+      }, err => alert('Tiada kebenaran membaca data: ' + err.message));
+    }
+
+    function stopCloudSync() {
+      if (db) {
+        db.ref('.info/connected').off();
+        db.ref('layoutNames').off();
+        if (listeningLayoutId) db.ref('layouts/' + listeningLayoutId + '/elements').off();
+      }
+      dbReady = false;
+      firstSnapshotHandled = false;
+      listeningLayoutId = null;
+      layouts = {};
+      elements = []; lastSaved = {}; selectedId = null;
+      closeDetailModal();
+      renderAll();
+    }
+
+    /* ===================== LAYOUTS ===================== */
+    function currentLayoutName() { return layouts[currentLayoutId] || 'LP2'; }
+
+    function renderLayoutSelect() {
+      const sel = document.getElementById('layoutSelect');
+      sel.innerHTML = Object.keys(layouts)
+        .sort((a, b) => (layouts[a] || '').localeCompare(layouts[b] || ''))
+        .map(id => `<option value="${id}" ${id === currentLayoutId ? 'selected' : ''}>${escapeHTML(layouts[id])}</option>`)
+        .join('');
+      sel.value = currentLayoutId;
+    }
+
+    function changeLayout(id) {
+      if (!layouts[id] || id === currentLayoutId) return;
+      currentLayoutId = id;
+      localStorage.setItem('currentLayoutId_v1', id);
+      attachElementsListener();
+    }
+
+    function addLayout() {
+      const name = (prompt('Nama layout baharu (cth: LP3, Bahagian B):') || '').trim();
+      if (!name) return;
+      const id = 'l' + Date.now();
+      currentLayoutId = id;
+      localStorage.setItem('currentLayoutId_v1', id);
+      db.ref().update({ ['layoutNames/' + id]: name.slice(0, 40) })
+        .catch(err => alert('Gagal cipta layout: ' + err.message));
+    }
+
+    function renameLayout() {
+      const name = (prompt('Tukar nama layout:', currentLayoutName()) || '').trim();
+      if (!name) return;
+      db.ref().update({ ['layoutNames/' + currentLayoutId]: name.slice(0, 40) })
+        .catch(err => alert('Gagal tukar nama: ' + err.message));
+    }
+
+    function deleteLayout() {
+      const ids = Object.keys(layouts);
+      if (ids.length <= 1) { alert('Sekurang-kurangnya satu layout diperlukan.'); return; }
+      const name = currentLayoutName();
+      if (!confirm(`Padam layout "${name}" beserta SEMUA bangunan, rekod dan gambar di dalamnya? Tindakan ini tidak boleh dibatalkan.`)) return;
+      if (!confirm(`Pasti? Layout "${name}" akan dipadam kekal.`)) return;
+      const doomedId = currentLayoutId;
+      elements.forEach(e => collectPhotoIds(e.doors).forEach(deletePhoto));
+      const nextId = ids.find(i => i !== doomedId);
+      currentLayoutId = nextId;
+      localStorage.setItem('currentLayoutId_v1', nextId);
+      attachElementsListener();
+      db.ref().update({ ['layoutNames/' + doomedId]: null, ['layouts/' + doomedId]: null })
+        .catch(err => alert('Gagal padam layout: ' + err.message));
+    }
+
+    function initFirebase() {
+      const loginMsg = document.getElementById('loginMessage');
+      if (firebaseConfig.apiKey.startsWith('PASTE') || firebaseConfig.appId.startsWith('PASTE')) {
+        loginMsg.innerHTML = '⚙️ <b>Firebase belum disambung.</b><br>Buka fail ini dan gantikan <code>AIzaSyCmc1cccrzh29H6SzWPt84a8rK1x747jU8</code> serta <code>1:821767387974:web:e933ff358659c498994347</code> dalam <code>firebaseConfig</code>.';
+        document.getElementById('loginForm').style.display = 'none';
+        return;
+      }
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      firebase.auth().onAuthStateChanged(user => {
+        if (user) {
+          document.getElementById('login-overlay').style.display = 'none';
+          startCloudSync();
+        } else {
+          stopCloudSync();
+          document.getElementById('login-overlay').style.display = 'flex';
+        }
+      });
+    }
+
+    /* ===================== IMPORT DATA LAMA (localStorage -> Firebase) ===================== */
+    // Reads houses saved in this browser by the earlier local-only versions
+    // (old single-map key + the per-layout keys), ignoring anything already imported.
+    function getLegacyLocal() {
+      if (localStorage.getItem('firebaseImported_v1')) return [];
+      const seen = new Set(), out = [];
+      const keys = ['myCanvasElements_v6'];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('layoutElements_v1_')) keys.push(k);
+      }
+      keys.forEach(k => {
+        try {
+          (JSON.parse(localStorage.getItem(k)) || []).forEach(el => {
+            if (el && el.id && !seen.has(el.id)) { seen.add(el.id); out.push(el); }
+          });
+        } catch (e) {}
+      });
+      return out;
+    }
+    function refreshImportButton() {
+      document.getElementById('btnImportLocal').style.display = getLegacyLocal().length > 0 ? 'inline-block' : 'none';
+    }
+    async function importLegacyLocal(skipConfirm) {
+      const legacy = getLegacyLocal();
+      if (!legacy.length || !dbReady) return;
+      if (!skipConfirm && !confirm(`Muat naik ${legacy.length} elemen dari peranti ini ke layout "${currentLayoutName()}"? Elemen dengan ID yang sama akan dilangkau.`)) return;
+      loadingOverlay.style.display = 'flex';
+      try {
+        const existing = new Set(elements.map(e => e.id));
+        const toAdd = [];
+        for (const raw of legacy) {
+          if (existing.has(raw.id)) continue;
+          const el = normalizeElement(raw);
+          for (const door of el.doors) {
+            for (const listKey of ['checklist', 'defects']) {
+              for (const key of Object.keys(door[listKey])) {
+                const entry = door[listKey][key];
+                if (entry && entry.gambar && entry.gambar.startsWith('data:')) {
+                  entry.gambar = await storeNewPhoto(entry.gambar);
+                }
+              }
+            }
+          }
+          toAdd.push(el);
+        }
+        elements = elements.concat(toAdd);
+        saveToStorage();
+        localStorage.setItem('firebaseImported_v1', '1'); // local copy is kept as a backup
+        refreshImportButton();
+        renderAll();
+        alert(`Selesai. ${toAdd.length} elemen dimuat naik ke Firebase.`);
+      } catch (err) {
+        alert('Gagal import: ' + err.message);
+      } finally {
+        loadingOverlay.style.display = 'none';
       }
     }
     function saveToStorageLockedState() {
@@ -603,6 +985,8 @@
 
     function deleteElement(id) {
       if (confirm('Adakah anda pasti mahu memadamkan elemen ini?')) {
+        const doomed = elements.find(e => e.id === id);
+        if (doomed) collectPhotoIds(doomed.doors).forEach(deletePhoto);
         elements = elements.filter(e => e.id !== id);
         selectedId = null;
         saveToStorage();
@@ -924,7 +1308,7 @@
                 </div>
                 ${itemData.gambar ? `
                   <div class="img-preview-container">
-                    <img src="${itemData.gambar}" class="img-preview">
+                    <img ${itemData.gambar.startsWith('data:') ? '' : `data-photo="${itemData.gambar}"`} src="${photoSrc(itemData.gambar)}" class="img-preview">
                     <button class="btn-remove-img" onclick="removeItemImage('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}')" title="Padam Gambar">✖</button>
                   </div>
                 ` : ''}
@@ -1001,6 +1385,7 @@
       formHTML += `<button class="btn-action btn-delete" onclick="deleteElement('${item.id}')">🗑️ Padam Elemen</button>`;
       document.getElementById('detailModalContent').innerHTML = formHTML;
       document.getElementById('detailModalBackdrop').classList.add('open');
+      loadMissingPhotos();
     }
 
     function updateBuildingName(id, value) {
@@ -1030,6 +1415,7 @@
         return;
       }
       if (!confirm(`Padam ${item.doors[item.doors.length - 1].label || 'pintu terakhir'}? Rekod pintu ini akan hilang.`)) return;
+      collectPhotoIds([item.doors[item.doors.length - 1]]).forEach(deletePhoto);
       item.doors.pop();
       item.doorCount = item.doors.length;
       saveToStorage();
@@ -1087,18 +1473,25 @@
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = function (evt) {
-        const entry = getChecklistEntry(id, doorIndex, listKey, key, false);
-        if (!entry) return;
-        entry.gambar = evt.target.result;
-        saveToStorage();
-        openDetailModal(id);
+      reader.onload = async function (evt) {
+        try {
+          const photoId = await storeNewPhoto(evt.target.result);
+          const entry = getChecklistEntry(id, doorIndex, listKey, key, false);
+          if (!entry) return;
+          deletePhoto(entry.gambar);
+          entry.gambar = photoId;
+          saveToStorage();
+          openDetailModal(id);
+        } catch (err) {
+          alert('Gagal muat naik gambar: ' + err.message);
+        }
       };
       reader.readAsDataURL(file);
     }
     function removeItemImage(id, doorIndex, listKey, key) {
       const entry = getChecklistEntry(id, doorIndex, listKey, key, false);
       if (!entry) return;
+      deletePhoto(entry.gambar);
       entry.gambar = '';
       saveToStorage();
       openDetailModal(id);
@@ -1133,13 +1526,15 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUri = canvas.toDataURL('image/jpeg', 0.8);
       const { houseId, doorIndex, listKey, key } = activeCamTarget;
-      const entry = getChecklistEntry(houseId, doorIndex, listKey, key, false);
-      if (entry) {
-        entry.gambar = dataUri;
+      closeCameraModal();
+      storeNewPhoto(dataUri).then(photoId => {
+        const entry = getChecklistEntry(houseId, doorIndex, listKey, key, false);
+        if (!entry) return;
+        deletePhoto(entry.gambar);
+        entry.gambar = photoId;
         saveToStorage();
         openDetailModal(houseId);
-      }
-      closeCameraModal();
+      }).catch(err => alert('Gagal simpan gambar: ' + err.message));
     }
     // Stop the camera if the tab is hidden mid-capture, so it doesn't keep running in the background.
     document.addEventListener('visibilitychange', () => {
@@ -1175,7 +1570,7 @@
 
         pdf.setFontSize(16);
         pdf.setTextColor(15, 23, 42);
-        pdf.text("Pelan / Layout Visual Tapak LP2", 14, 15);
+        pdf.text(`Pelan / Layout Visual Tapak ${currentLayoutName()}`, 14, 15);
         pdf.setFontSize(9);
         pdf.setTextColor(100);
         pdf.text(`Tarikh Cetakan: ${new Date().toLocaleDateString('ms-MY')}`, 14, 21);
@@ -1264,6 +1659,7 @@
     /* ===================== INIT ===================== */
     updateLockUI();
     switchView(currentView);
+    initFirebase();
   </script>
 </body>
 </html>
