@@ -152,6 +152,7 @@
       text-align: center; flex-direction: column; padding: 4px;
       transform-origin: center center;
       transition: left 0.15s ease-out, top 0.15s ease-out, width 0.15s ease-out, height 0.15s ease-out, transform 0.15s ease-out;
+      touch-action: none;
     }
     .element-box.is-locked { cursor: pointer !important; }
     .element-box.dragging, .element-box.resizing, .element-box.rotating { transition: none !important; }
@@ -180,13 +181,13 @@
       position: absolute; right: -5px; bottom: -5px;
       width: 12px; height: 12px; background-color: #FFFFFF;
       border: 2px solid #0F172A; border-radius: 2px;
-      cursor: nwse-resize; display: none;
+      cursor: nwse-resize; display: none; touch-action: none;
     }
     .rotate-handle {
       position: absolute; top: -25px; left: 50%; transform: translateX(-50%);
       width: 16px; height: 16px; background-color: #38BDF8;
       border: 2px solid #FFFFFF; border-radius: 50%;
-      cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4); touch-action: none;
     }
     .rotate-handle::after {
       content: ''; position: absolute; top: 14px; left: 5px;
@@ -492,6 +493,8 @@
     let panX = 0, panY = 0, zoomLevel = 1.0;
     const MIN_ZOOM = 0.2, MAX_ZOOM = 3.0;
     let isPanning = false, startPanX = 0, startPanY = 0;
+    let initialPinchDist = 0;
+    let initialPinchZoom = 1.0;
 
     const container = document.getElementById('canvas-container');
     const viewport = document.getElementById('canvas-viewport');
@@ -1133,6 +1136,12 @@
       setZoom(zoomLevel + delta, e.clientX, e.clientY);
     }, { passive: false });
 
+    function getTouchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    }
+
     container.addEventListener('mousedown', (e) => {
       if (e.target === container || e.target === viewport) {
         isPanning = true;
@@ -1150,6 +1159,43 @@
     });
     window.addEventListener('mouseup', () => { isPanning = false; });
 
+    container.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        if (e.target === container || e.target === viewport) {
+          isPanning = true;
+          startPanX = e.touches[0].clientX - panX;
+          startPanY = e.touches[0].clientY - panY;
+          selectedId = null;
+          renderCanvas();
+        }
+      } else if (e.touches.length === 2) {
+        isPanning = false;
+        initialPinchDist = getTouchDistance(e.touches);
+        initialPinchZoom = zoomLevel;
+      }
+    }, { passive: false });
+
+    container.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1 && isPanning) {
+        e.preventDefault();
+        panX = e.touches[0].clientX - startPanX;
+        panY = e.touches[0].clientY - startPanY;
+        updateViewportTransform();
+      } else if (e.touches.length === 2 && initialPinchDist > 0) {
+        e.preventDefault();
+        const dist = getTouchDistance(e.touches);
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const targetZoom = initialPinchZoom * (dist / initialPinchDist);
+        setZoom(targetZoom, midX, midY);
+      }
+    }, { passive: false });
+
+    container.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) initialPinchDist = 0;
+      if (e.touches.length === 0) isPanning = false;
+    });
+
     function renderCanvas() {
       viewport.innerHTML = '';
       elements.forEach(item => {
@@ -1165,7 +1211,7 @@
           div.innerHTML = `<div>${config.icon} ${escapeHTML(item.name || config.label)}</div>${doorLabel}${defectBadge}`;
         } else {
           div.className = `element-box type-road ${item.id === selectedId ? 'active' : ''} ${lockClass}`;
-          div.innerHTML = `🛣️ Jalan Utama`;
+          div.innerHTML = `GK Jalan Utama`;
         }
 
         div.style.left = item.x + 'px';
@@ -1216,80 +1262,161 @@
     function makeDraggableResizableRotatable(el, resizeHandle, rotateHandle, item) {
       let startX, startY, startLeft, startTop;
 
+      const onDragStart = (clientX, clientY) => {
+        el.classList.add('dragging');
+        startX = clientX; startY = clientY;
+        startLeft = item.x; startTop = item.y;
+      };
+      const onDragMove = (clientX, clientY) => {
+        const dx = (clientX - startX) / zoomLevel;
+        const dy = (clientY - startY) / zoomLevel;
+        item.x = snapToGrid(startLeft + dx);
+        item.y = snapToGrid(startTop + dy);
+        el.style.left = item.x + 'px';
+        el.style.top = item.y + 'px';
+      };
+      const onDragEnd = () => {
+        el.classList.remove('dragging');
+        saveToStorage();
+      };
+
       el.addEventListener('mousedown', (e) => {
         if (e.target === resizeHandle || e.target === rotateHandle || isLayoutLocked) return;
         e.stopPropagation();
-        el.classList.add('dragging');
-        startX = e.clientX; startY = e.clientY;
-        startLeft = item.x; startTop = item.y;
-
-        function onMouseMove(e) {
-          const dx = (e.clientX - startX) / zoomLevel;
-          const dy = (e.clientY - startY) / zoomLevel;
-          item.x = snapToGrid(startLeft + dx);
-          item.y = snapToGrid(startTop + dy);
-          el.style.left = item.x + 'px';
-          el.style.top = item.y + 'px';
-        }
+        onDragStart(e.clientX, e.clientY);
+        function onMouseMove(e) { onDragMove(e.clientX, e.clientY); }
         function onMouseUp() {
-          el.classList.remove('dragging');
+          onDragEnd();
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
-          saveToStorage();
         }
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
       });
+
+      el.addEventListener('touchstart', (e) => {
+        if (e.target === resizeHandle || e.target === rotateHandle || isLayoutLocked || e.touches.length > 1) return;
+        e.stopPropagation();
+        const t = e.touches[0];
+        onDragStart(t.clientX, t.clientY);
+        function onTouchMove(e) {
+          if (e.touches.length > 1) return;
+          e.preventDefault();
+          onDragMove(e.touches[0].clientX, e.touches[0].clientY);
+        }
+        function onTouchEnd() {
+          onDragEnd();
+          window.removeEventListener('touchmove', onTouchMove);
+          window.removeEventListener('touchend', onTouchEnd);
+        }
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+      }, { passive: false });
+
+      const onResizeStart = (clientX, clientY) => {
+        el.classList.add('resizing');
+        startX = clientX; startY = clientY;
+      };
+      const onResizeMove = (clientX, clientY, startW, startH) => {
+        const dx = (clientX - startX) / zoomLevel;
+        const dy = (clientY - startY) / zoomLevel;
+        item.w = Math.max(GRID_SIZE * 2, snapToGrid(startW + dx));
+        item.h = Math.max(GRID_SIZE * 2, snapToGrid(startH + dy));
+        el.style.width = item.w + 'px';
+        el.style.height = item.h + 'px';
+      };
+      const onResizeEnd = () => {
+        el.classList.remove('resizing');
+        saveToStorage();
+      };
 
       resizeHandle.addEventListener('mousedown', (e) => {
         if (isLayoutLocked) return;
         e.stopPropagation();
-        el.classList.add('resizing');
-        startX = e.clientX; startY = e.clientY;
+        onResizeStart(e.clientX, e.clientY);
         const startW = item.w, startH = item.h;
-
-        function onMouseMove(e) {
-          const dx = (e.clientX - startX) / zoomLevel;
-          const dy = (e.clientY - startY) / zoomLevel;
-          item.w = Math.max(GRID_SIZE * 2, snapToGrid(startW + dx));
-          item.h = Math.max(GRID_SIZE * 2, snapToGrid(startH + dy));
-          el.style.width = item.w + 'px';
-          el.style.height = item.h + 'px';
-        }
+        function onMouseMove(e) { onResizeMove(e.clientX, e.clientY, startW, startH); }
         function onMouseUp() {
-          el.classList.remove('resizing');
+          onResizeEnd();
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
-          saveToStorage();
         }
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
       });
+
+      resizeHandle.addEventListener('touchstart', (e) => {
+        if (isLayoutLocked || e.touches.length > 1) return;
+        e.stopPropagation();
+        const t = e.touches[0];
+        onResizeStart(t.clientX, t.clientY);
+        const startW = item.w, startH = item.h;
+        function onTouchMove(e) {
+          if (e.touches.length > 1) return;
+          e.preventDefault();
+          onResizeMove(e.touches[0].clientX, e.touches[0].clientY, startW, startH);
+        }
+        function onTouchEnd() {
+          onResizeEnd();
+          window.removeEventListener('touchmove', onTouchMove);
+          window.removeEventListener('touchend', onTouchEnd);
+        }
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+      }, { passive: false });
+
+      const onRotateStart = () => {
+        el.classList.add('rotating');
+        const rect = el.getBoundingClientRect();
+        return {
+          centerX: rect.left + rect.width / 2,
+          centerY: rect.top + rect.height / 2
+        };
+      };
+      const onRotateMove = (clientX, clientY, centerX, centerY, snapShift = false) => {
+        const radians = Math.atan2(clientX - centerX, -(clientY - centerY));
+        let degrees = Math.round(radians * (180 / Math.PI));
+        if (snapShift) degrees = Math.round(degrees / 15) * 15;
+        item.rotation = degrees;
+        el.style.transform = `rotate(${degrees}deg)`;
+      };
+      const onRotateEnd = () => {
+        el.classList.remove('rotating');
+        saveToStorage();
+      };
 
       rotateHandle.addEventListener('mousedown', (e) => {
         if (isLayoutLocked) return;
         e.stopPropagation();
-        el.classList.add('rotating');
-        const rect = el.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-
-        function onMouseMove(e) {
-          const radians = Math.atan2(e.clientX - centerX, -(e.clientY - centerY));
-          let degrees = Math.round(radians * (180 / Math.PI));
-          if (e.shiftKey) degrees = Math.round(degrees / 15) * 15;
-          item.rotation = degrees;
-          el.style.transform = `rotate(${degrees}deg)`;
-        }
+        const { centerX, centerY } = onRotateStart();
+        function onMouseMove(e) { onRotateMove(e.clientX, e.clientY, centerX, centerY, e.shiftKey); }
         function onMouseUp() {
-          el.classList.remove('rotating');
+          onRotateEnd();
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
-          saveToStorage();
         }
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
       });
+
+      rotateHandle.addEventListener('touchstart', (e) => {
+        if (isLayoutLocked || e.touches.length > 1) return;
+        e.stopPropagation();
+        const { centerX, centerY } = onRotateStart();
+        function onTouchMove(e) {
+          if (e.touches.length > 1) return;
+          e.preventDefault();
+          const t = e.touches[0];
+          onRotateMove(t.clientX, t.clientY, centerX, centerY);
+        }
+        function onTouchEnd() {
+          onRotateEnd();
+          window.removeEventListener('touchmove', onTouchMove);
+          window.removeEventListener('touchend', onTouchEnd);
+        }
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+      }, { passive: false });
     }
 
     /* ===================== DETAIL MODAL ===================== */
