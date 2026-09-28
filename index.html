@@ -151,6 +151,7 @@
       text-align: center; flex-direction: column; padding: 4px;
       transform-origin: center center;
       transition: left 0.15s ease-out, top 0.15s ease-out, width 0.15s ease-out, height 0.15s ease-out, transform 0.15s ease-out;
+      touch-action: none;
     }
     .element-box.is-locked { cursor: pointer !important; }
     .element-box.dragging, .element-box.resizing, .element-box.rotating { transition: none !important; }
@@ -192,18 +193,18 @@
 
     .resize-handle {
       position: absolute; right: -5px; bottom: -5px;
-      width: 12px; height: 12px; background-color: #FFFFFF;
+      width: 16px; height: 16px; background-color: #FFFFFF;
       border: 2px solid #0F172A; border-radius: 2px;
-      cursor: nwse-resize; display: none;
+      cursor: nwse-resize; display: none; touch-action: none;
     }
     .rotate-handle {
       position: absolute; top: -25px; left: 50%; transform: translateX(-50%);
-      width: 16px; height: 16px; background-color: #38BDF8;
+      width: 20px; height: 20px; background-color: #38BDF8;
       border: 2px solid #FFFFFF; border-radius: 50%;
-      cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4); touch-action: none;
     }
     .rotate-handle::after {
-      content: ''; position: absolute; top: 14px; left: 5px;
+      content: ''; position: absolute; top: 18px; left: 7px;
       width: 2px; height: 8px; background-color: #38BDF8;
     }
     .element-box.active:not(.is-locked) .resize-handle,
@@ -480,8 +481,6 @@
   <script>
     const GRID_SIZE = 20;
     /* ===================== FIREBASE CONFIG ===================== */
-    // >>> LENGKAPKAN 2 nilai di bawah (apiKey & appId) daripada Firebase Console:
-    // Project settings -> Your apps -> (web app) -> firebaseConfig
     const firebaseConfig = {
       apiKey: "AIzaSyCmc1cccrzh29H6SzWPt84a8rK1x747jU8",
       authDomain: "estate-perumahan.firebaseapp.com",
@@ -600,8 +599,6 @@
     }
 
     /* ===================== STORAGE ===================== */
-    // Saves only the houses that actually changed (one node per house), so two people editing
-    // different houses at the same time don't overwrite each other.
     function saveToStorage() {
       if (!dbReady || !currentLayoutId) return;
       const updates = {};
@@ -627,7 +624,6 @@
 
     function idTime(id) { return parseInt(String(id).split('_').pop(), 10) || 0; }
 
-    // Realtime Database drops empty arrays/objects, so rebuild them after loading.
     function normalizeElement(raw) {
       const el = JSON.parse(JSON.stringify(raw));
       if (el.type === 'building' && el.category === 'pekerja') {
@@ -645,7 +641,7 @@
       return el;
     }
 
-    /* ===================== PHOTOS (stored separately from houses) ===================== */
+    /* ===================== PHOTOS ===================== */
     function photoSrc(g) {
       if (!g) return '';
       return g.startsWith('data:') ? g : (photoCache[g] || '');
@@ -720,7 +716,6 @@
     function startCloudSync() {
       dbReady = true;
       db.ref('.info/connected').on('value', s => setSyncStatus(s.val() === true));
-      // One-time move of the old single map (/elements) into a layout called "LP2".
       Promise.all([db.ref('elements').once('value'), db.ref('layoutNames').once('value')])
         .then(([legacySnap, namesSnap]) => {
           if (!namesSnap.val()) {
@@ -857,9 +852,7 @@
       });
     }
 
-    /* ===================== IMPORT DATA LAMA (localStorage -> Firebase) ===================== */
-    // Reads houses saved in this browser by the earlier local-only versions
-    // (old single-map key + the per-layout keys), ignoring anything already imported.
+    /* ===================== IMPORT DATA LAMA ===================== */
     function getLegacyLocal() {
       if (localStorage.getItem('firebaseImported_v1')) return [];
       const seen = new Set(), out = [];
@@ -905,7 +898,7 @@
         }
         elements = elements.concat(toAdd);
         saveToStorage();
-        localStorage.setItem('firebaseImported_v1', '1'); // local copy is kept as a backup
+        localStorage.setItem('firebaseImported_v1', '1');
         refreshImportButton();
         renderAll();
         alert(`Selesai. ${toAdd.length} elemen dimuat naik ke Firebase.`);
@@ -927,7 +920,6 @@
 
     /* ===================== ADD / DELETE BUILDINGS ===================== */
     function nextGridSpawn() {
-      // Simple staggered placement so new elements don't stack directly on each other on the map.
       const count = elements.length;
       const col = count % 5;
       const row = Math.floor(count / 5);
@@ -1068,7 +1060,7 @@
       }).join('');
     }
 
-    /* ===================== MAP VIEW ===================== */
+    /* ===================== MAP VIEW & CANVAS PANNING ===================== */
     function updateLockUI() {
       if (isLayoutLocked) {
         btnLock.innerHTML = '🔒 Layout Terkunci';
@@ -1110,22 +1102,40 @@
       setZoom(zoomLevel + delta, e.clientX, e.clientY);
     }, { passive: false });
 
-    container.addEventListener('mousedown', (e) => {
+    // Panning canvas dengan tetikus & sentuhan telefon[cite: 1]
+    function handlePanStart(e) {
       if (e.target === container || e.target === viewport) {
         isPanning = true;
-        startPanX = e.clientX - panX;
-        startPanY = e.clientY - panY;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startPanX = clientX - panX;
+        startPanY = clientY - panY;
         selectedId = null;
         renderCanvas();
       }
-    });
-    window.addEventListener('mousemove', (e) => {
+    }
+
+    function handlePanMove(e) {
       if (!isPanning) return;
-      panX = e.clientX - startPanX;
-      panY = e.clientY - startPanY;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      panX = clientX - startPanX;
+      panY = clientY - startPanY;
       updateViewportTransform();
-    });
-    window.addEventListener('mouseup', () => { isPanning = false; });
+    }
+
+    function handlePanEnd() {
+      isPanning = false;
+    }
+
+    container.addEventListener('mousedown', handlePanStart);
+    container.addEventListener('touchstart', handlePanStart, { passive: false });
+
+    window.addEventListener('mousemove', handlePanMove);
+    window.addEventListener('touchmove', handlePanMove, { passive: false });
+
+    window.addEventListener('mouseup', handlePanEnd);
+    window.addEventListener('touchend', handlePanEnd);
 
     function renderCanvas() {
       viewport.innerHTML = '';
@@ -1158,7 +1168,7 @@
 
         const rotateHandle = document.createElement('div');
         rotateHandle.className = 'rotate-handle';
-        rotateHandle.title = "Klik & seret untuk putar (Pegang Shift untuk snap 15°)";
+        rotateHandle.title = "Klik & seret untuk putar";
         div.appendChild(rotateHandle);
 
         makeDraggableResizableRotatable(div, resizeHandle, rotateHandle, item);
@@ -1192,60 +1202,98 @@
       });
     }
 
+    /* ===================== DRAG, RESIZE & ROTATE (DESKTOP + TOUCH MOBILE) ===================== */
     function makeDraggableResizableRotatable(el, resizeHandle, rotateHandle, item) {
       let startX, startY, startLeft, startTop;
 
-      el.addEventListener('mousedown', (e) => {
+      function getPos(e) {
+        if (e.touches && e.touches.length > 0) {
+          return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+        return { x: e.clientX, y: e.clientY };
+      }
+
+      // --- DRAGGING ---
+      function startDrag(e) {
         if (e.target === resizeHandle || e.target === rotateHandle || isLayoutLocked) return;
         e.stopPropagation();
         el.classList.add('dragging');
-        startX = e.clientX; startY = e.clientY;
-        startLeft = item.x; startTop = item.y;
+        
+        const pos = getPos(e);
+        startX = pos.x; 
+        startY = pos.y;
+        startLeft = item.x; 
+        startTop = item.y;
 
-        function onMouseMove(e) {
-          const dx = (e.clientX - startX) / zoomLevel;
-          const dy = (e.clientY - startY) / zoomLevel;
+        function onMove(evt) {
+          const currentPos = getPos(evt);
+          const dx = (currentPos.x - startX) / zoomLevel;
+          const dy = (currentPos.y - startY) / zoomLevel;
           item.x = snapToGrid(startLeft + dx);
           item.y = snapToGrid(startTop + dy);
           el.style.left = item.x + 'px';
           el.style.top = item.y + 'px';
         }
-        function onMouseUp() {
+
+        function onEnd() {
           el.classList.remove('dragging');
-          window.removeEventListener('mousemove', onMouseMove);
-          window.removeEventListener('mouseup', onMouseUp);
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onEnd);
+          window.removeEventListener('touchmove', onMove);
+          window.removeEventListener('touchend', onEnd);
           saveToStorage();
         }
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-      });
 
-      resizeHandle.addEventListener('mousedown', (e) => {
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onEnd);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('touchend', onEnd);
+      }
+
+      el.addEventListener('mousedown', startDrag);
+      el.addEventListener('touchstart', startDrag, { passive: false });
+
+      // --- RESIZING ---
+      function startResize(e) {
         if (isLayoutLocked) return;
         e.stopPropagation();
         el.classList.add('resizing');
-        startX = e.clientX; startY = e.clientY;
+        
+        const pos = getPos(e);
+        startX = pos.x; 
+        startY = pos.y;
         const startW = item.w, startH = item.h;
 
-        function onMouseMove(e) {
-          const dx = (e.clientX - startX) / zoomLevel;
-          const dy = (e.clientY - startY) / zoomLevel;
+        function onMove(evt) {
+          const currentPos = getPos(evt);
+          const dx = (currentPos.x - startX) / zoomLevel;
+          const dy = (currentPos.y - startY) / zoomLevel;
           item.w = Math.max(GRID_SIZE * 2, snapToGrid(startW + dx));
           item.h = Math.max(GRID_SIZE * 2, snapToGrid(startH + dy));
           el.style.width = item.w + 'px';
           el.style.height = item.h + 'px';
         }
-        function onMouseUp() {
+
+        function onEnd() {
           el.classList.remove('resizing');
-          window.removeEventListener('mousemove', onMouseMove);
-          window.removeEventListener('mouseup', onMouseUp);
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onEnd);
+          window.removeEventListener('touchmove', onMove);
+          window.removeEventListener('touchend', onEnd);
           saveToStorage();
         }
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-      });
 
-      rotateHandle.addEventListener('mousedown', (e) => {
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onEnd);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('touchend', onEnd);
+      }
+
+      resizeHandle.addEventListener('mousedown', startResize);
+      resizeHandle.addEventListener('touchstart', startResize, { passive: false });
+
+      // --- ROTATING ---
+      function startRotate(e) {
         if (isLayoutLocked) return;
         e.stopPropagation();
         el.classList.add('rotating');
@@ -1253,25 +1301,35 @@
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
 
-        function onMouseMove(e) {
-          const radians = Math.atan2(e.clientX - centerX, -(e.clientY - centerY));
+        function onMove(evt) {
+          const currentPos = getPos(evt);
+          const radians = Math.atan2(currentPos.x - centerX, -(currentPos.y - centerY));
           let degrees = Math.round(radians * (180 / Math.PI));
-          if (e.shiftKey) degrees = Math.round(degrees / 15) * 15;
+          if (evt.shiftKey) degrees = Math.round(degrees / 15) * 15;
           item.rotation = degrees;
           el.style.transform = `rotate(${degrees}deg)`;
         }
-        function onMouseUp() {
+
+        function onEnd() {
           el.classList.remove('rotating');
-          window.removeEventListener('mousemove', onMouseMove);
-          window.removeEventListener('mouseup', onMouseUp);
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onEnd);
+          window.removeEventListener('touchmove', onMove);
+          window.removeEventListener('touchend', onEnd);
           saveToStorage();
         }
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-      });
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onEnd);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('touchend', onEnd);
+      }
+
+      rotateHandle.addEventListener('mousedown', startRotate);
+      rotateHandle.addEventListener('touchstart', startRotate, { passive: false });
     }
 
-    /* ===================== DETAIL MODAL (doors / checklist) ===================== */
+    /* ===================== DETAIL MODAL ===================== */
     function openAddModal() { document.getElementById('addModalBackdrop').classList.add('open'); }
     function closeAddModal() { document.getElementById('addModalBackdrop').classList.remove('open'); }
 
@@ -1289,7 +1347,7 @@
             <div class="item-details">
               <div class="form-group" style="margin:0;">
                 <label style="font-size:10px;">${isDefect ? 'Tarikh Dilaporkan:' : 'Tarikh Diganti / Dibekal:'}</label>
-                <input type="date" value="${itemData.tarikh || ''}" onchange="updateItemDate('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.value)">
+                <input type="date" value="${itemData.tarikh || ''}" onchange="updateItemDate('${itemId}',${doorIndex}, '${listKey}', '${chk.key}', this.value)">
               </div>
               ${isDefect ? `
                 <div class="form-group" style="margin:0;">
@@ -1300,10 +1358,10 @@
               <div class="form-group" style="margin:0;">
                 <label style="font-size:10px;">Gambar Bukti${isDefect ? ' Kerosakan' : ' Kelengkapan'}:</label>
                 <div class="image-action-buttons">
-                  <button class="btn-camera-action" type="button" onclick="openCameraModal('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}')">📸 Kamera</button>
+                  <button class="btn-camera-action" type="button" onclick="openCameraModal('${itemId}',${doorIndex}, '${listKey}', '${chk.key}')">📸 Kamera</button>
                   <label class="btn-gallery-action">
                     🖼️ Galeri / Fail
-                    <input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage(event, '${itemId}', ${doorIndex}, '${listKey}', '${chk.key}')">
+                    <input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage(event, '${itemId}',${doorIndex}, '${listKey}', '${chk.key}')">
                   </label>
                 </div>
                 ${itemData.gambar ? `
@@ -1536,7 +1594,6 @@
         openDetailModal(houseId);
       }).catch(err => alert('Gagal simpan gambar: ' + err.message));
     }
-    // Stop the camera if the tab is hidden mid-capture, so it doesn't keep running in the background.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && cameraStream) closeCameraModal();
     });
