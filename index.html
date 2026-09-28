@@ -1160,13 +1160,16 @@
     window.addEventListener('mouseup', () => { isPanning = false; });
 
     container.addEventListener('touchstart', (e) => {
+      const isTargetCanvas = (e.target === container || e.target === viewport);
       if (e.touches.length === 1) {
-        if (e.target === container || e.target === viewport) {
+        if (isTargetCanvas || isLayoutLocked) {
           isPanning = true;
           startPanX = e.touches[0].clientX - panX;
           startPanY = e.touches[0].clientY - panY;
-          selectedId = null;
-          renderCanvas();
+          if (isTargetCanvas) {
+            selectedId = null;
+            renderCanvas();
+          }
         }
       } else if (e.touches.length === 2) {
         isPanning = false;
