@@ -2,7 +2,7 @@
 <html lang="ms">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Pengurusan Rumah Pekerja - LP2</title>
   <!-- Pustaka html2canvas & jsPDF untuk Fungsi Ekstrak PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -18,8 +18,9 @@
       width: 100%; height: 100%; margin: 0; padding: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background-color: #0F172A; color: #F8FAFC;
+      overflow: hidden;
     }
-    #app-container { display: flex; flex-direction: column; width: 100vw; height: 100vh; }
+    #app-container { display: flex; flex-direction: column; width: 100vw; height: 100dvh; }
 
     /* ===== Header ===== */
     #app-header {
@@ -48,7 +49,7 @@
     .btn-header-action:hover { opacity: 0.9; }
 
     /* ===== List View ===== */
-    #listView { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #listView { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
     .filter-bar {
       flex-shrink: 0; display: flex; gap: 6px; padding: 10px 14px; overflow-x: auto;
       border-bottom: 1px solid #1E293B;
@@ -169,18 +170,7 @@
       0%, 100% { box-shadow: 0 0 6px #EF4444, 0 4px 10px rgba(0,0,0,0.3); }
       50% { box-shadow: 0 0 22px 4px #EF4444, 0 4px 10px rgba(0,0,0,0.3); }
     }
-    .defect-badge {
-      position: absolute; top: -10px; right: -10px; background: #EF4444; color: white;
-      font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 999px;
-      border: 2px solid #0F172A; pointer-events: none; white-space: nowrap;
-    }
     .element-box.active { border-color: #FFFFFF !important; box-shadow: 0 0 14px #FFFFFF; }
-    .building-card.has-defect { border-left-color: #EF4444; border-color: #7F1D1D; }
-    .defect-pill {
-      display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 8px;
-      border-radius: 999px; margin: 4px 0 0 6px; background: #450A0A; color: #FCA5A5;
-      border: 1px solid #EF4444;
-    }
     .element-box.has-defect { border-color: #EF4444; box-shadow: 0 0 12px rgba(239,68,68,0.8); }
     .element-box.has-defect.active { box-shadow: 0 0 14px #FFFFFF, 0 0 20px rgba(239,68,68,0.9); }
     .defect-badge {
@@ -189,28 +179,27 @@
       font-size: 11px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.5); border: 2px solid #0F172A;
       animation: defectPulse 1.4s ease-in-out infinite; z-index: 5;
     }
-    @keyframes defectPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 
     .resize-handle {
-      position: absolute; right: -5px; bottom: -5px;
-      width: 16px; height: 16px; background-color: #FFFFFF;
-      border: 2px solid #0F172A; border-radius: 2px;
+      position: absolute; right: -10px; bottom: -10px;
+      width: 22px; height: 22px; background-color: #FFFFFF;
+      border: 2px solid #0F172A; border-radius: 4px;
       cursor: nwse-resize; display: none; touch-action: none;
     }
     .rotate-handle {
-      position: absolute; top: -25px; left: 50%; transform: translateX(-50%);
-      width: 20px; height: 20px; background-color: #38BDF8;
+      position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+      width: 24px; height: 24px; background-color: #38BDF8;
       border: 2px solid #FFFFFF; border-radius: 50%;
       cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4); touch-action: none;
     }
     .rotate-handle::after {
-      content: ''; position: absolute; top: 18px; left: 7px;
-      width: 2px; height: 8px; background-color: #38BDF8;
+      content: ''; position: absolute; top: 20px; left: 9px;
+      width: 2px; height: 10px; background-color: #38BDF8;
     }
     .element-box.active:not(.is-locked) .resize-handle,
     .element-box.active:not(.is-locked) .rotate-handle { display: block; }
 
-    /* ===== Modal shell (shared by Add + Detail) ===== */
+    /* ===== Modal shell ===== */
     .modal-backdrop {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.75); z-index: 300;
@@ -243,7 +232,7 @@
     .add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .add-grid button { padding: 16px 10px; font-size: 13px; }
 
-    /* Form Styles & Checklist Grid (detail modal) */
+    /* Form Styles & Checklist Grid */
     .form-group { margin-bottom: 10px; }
     .form-group label { display: block; font-size: 11px; color: #CBD5E1; margin-bottom: 4px; }
     .form-group input, .form-group select {
@@ -275,7 +264,7 @@
       display: flex; align-items: center; justify-content: space-between; gap: 6px;
       font-size: 11px; color: #E2E8F0; font-weight: bold;
     }
-    .item-header input[type="checkbox"] { width: 14px; height: 14px; accent-color: #10B981; cursor: pointer; }
+    .item-header input[type="checkbox"] { width: 16px; height: 16px; accent-color: #10B981; cursor: pointer; }
     .item-details {
       margin-top: 6px; padding-top: 6px; border-top: 1px dashed #334155;
       display: flex; flex-direction: column; gap: 6px;
@@ -374,7 +363,7 @@
   </div>
 
   <div id="loading-overlay">
-    <div style="font-size: 18px; margin-bottom: 10px;">📄 Menyedia, Mengorientasi & Tangkap Map Ke PDF...</div>
+    <div style="font-size: 18px; margin-bottom: 10px;">📄 Menyedia & Tangkap Map Ke PDF...</div>
     <div style="font-size: 12px; color: #94A3B8;">Sila tunggu sebentar.</div>
   </div>
 
@@ -480,7 +469,6 @@
 
   <script>
     const GRID_SIZE = 20;
-    /* ===================== FIREBASE CONFIG ===================== */
     const firebaseConfig = {
       apiKey: "AIzaSyCmc1cccrzh29H6SzWPt84a8rK1x747jU8",
       authDomain: "estate-perumahan.firebaseapp.com",
@@ -493,10 +481,10 @@
     let elements = [];
     let db = null;
     let dbReady = false;
-    let lastSaved = {};          // id -> JSON string of what cloud currently has
-    let photoCache = {};         // photoId -> dataURI
+    let lastSaved = {};
+    let photoCache = {};
     let firstSnapshotHandled = false;
-    let layouts = {};            // layoutId -> name
+    let layouts = {};
     let currentLayoutId = localStorage.getItem('currentLayoutId_v1') || '';
     let listeningLayoutId = null;
     let selectedId = null;
@@ -509,6 +497,7 @@
     let panX = 0, panY = 0, zoomLevel = 1.0;
     const MIN_ZOOM = 0.2, MAX_ZOOM = 3.0;
     let isPanning = false, startPanX = 0, startPanY = 0;
+    let touchStartDist = 0;
 
     const container = document.getElementById('canvas-container');
     const viewport = document.getElementById('canvas-viewport');
@@ -566,6 +555,14 @@
 
     function escapeHTML(str) {
       return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    /* Helper: Returns position coordinates regardless of mouse vs touch events */
+    function getPointerPos(e) {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+      return { x: e.clientX, y: e.clientY };
     }
 
     /* ===================== VIEW SWITCHING ===================== */
@@ -835,7 +832,7 @@
     function initFirebase() {
       const loginMsg = document.getElementById('loginMessage');
       if (firebaseConfig.apiKey.startsWith('PASTE') || firebaseConfig.appId.startsWith('PASTE')) {
-        loginMsg.innerHTML = '⚙️ <b>Firebase belum disambung.</b><br>Buka fail ini dan gantikan <code>AIzaSyCmc1cccrzh29H6SzWPt84a8rK1x747jU8</code> serta <code>1:821767387974:web:e933ff358659c498994347</code> dalam <code>firebaseConfig</code>.';
+        loginMsg.innerHTML = '⚙️ <b>Firebase belum disambung.</b><br>Buka fail ini dan gantikan config Firebase anda.';
         document.getElementById('loginForm').style.display = 'none';
         return;
       }
@@ -852,7 +849,6 @@
       });
     }
 
-    /* ===================== IMPORT DATA LAMA ===================== */
     function getLegacyLocal() {
       if (localStorage.getItem('firebaseImported_v1')) return [];
       const seen = new Set(), out = [];
@@ -870,9 +866,11 @@
       });
       return out;
     }
+
     function refreshImportButton() {
       document.getElementById('btnImportLocal').style.display = getLegacyLocal().length > 0 ? 'inline-block' : 'none';
     }
+
     async function importLegacyLocal(skipConfirm) {
       const legacy = getLegacyLocal();
       if (!legacy.length || !dbReady) return;
@@ -908,6 +906,7 @@
         loadingOverlay.style.display = 'none';
       }
     }
+
     function saveToStorageLockedState() {
       localStorage.setItem('myLayoutLocked_v6', JSON.stringify(isLayoutLocked));
     }
@@ -1060,7 +1059,7 @@
       }).join('');
     }
 
-    /* ===================== MAP VIEW & CANVAS PANNING ===================== */
+    /* ===================== MAP VIEW ===================== */
     function updateLockUI() {
       if (isLayoutLocked) {
         btnLock.innerHTML = '🔒 Layout Terkunci';
@@ -1102,40 +1101,62 @@
       setZoom(zoomLevel + delta, e.clientX, e.clientY);
     }, { passive: false });
 
-    // Panning canvas dengan tetikus & sentuhan telefon[cite: 1]
-    function handlePanStart(e) {
+    /* Unified Touch / Mouse Panning & Pinch Zooming */
+    function startPan(e) {
       if (e.target === container || e.target === viewport) {
+        if (e.touches && e.touches.length === 2) {
+          isPanning = false;
+          touchStartDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          return;
+        }
         isPanning = true;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        startPanX = clientX - panX;
-        startPanY = clientY - panY;
+        const pos = getPointerPos(e);
+        startPanX = pos.x - panX;
+        startPanY = pos.y - panY;
         selectedId = null;
         renderCanvas();
       }
     }
 
-    function handlePanMove(e) {
+    function movePan(e) {
+      if (e.touches && e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        if (touchStartDist > 0) {
+          const factor = dist / touchStartDist;
+          const center = {
+            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+          };
+          setZoom(zoomLevel * factor, center.x, center.y);
+          touchStartDist = dist;
+        }
+        return;
+      }
       if (!isPanning) return;
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      panX = clientX - startPanX;
-      panY = clientY - startPanY;
+      const pos = getPointerPos(e);
+      panX = pos.x - startPanX;
+      panY = pos.y - startPanY;
       updateViewportTransform();
     }
 
-    function handlePanEnd() {
+    function endPan() {
       isPanning = false;
+      touchStartDist = 0;
     }
 
-    container.addEventListener('mousedown', handlePanStart);
-    container.addEventListener('touchstart', handlePanStart, { passive: false });
+    container.addEventListener('mousedown', startPan);
+    window.addEventListener('mousemove', movePan);
+    window.addEventListener('mouseup', endPan);
 
-    window.addEventListener('mousemove', handlePanMove);
-    window.addEventListener('touchmove', handlePanMove, { passive: false });
-
-    window.addEventListener('mouseup', handlePanEnd);
-    window.addEventListener('touchend', handlePanEnd);
+    container.addEventListener('touchstart', startPan, { passive: false });
+    window.addEventListener('touchmove', movePan, { passive: false });
+    window.addEventListener('touchend', endPan);
 
     function renderCanvas() {
       viewport.innerHTML = '';
@@ -1202,31 +1223,20 @@
       });
     }
 
-    /* ===================== DRAG, RESIZE & ROTATE (DESKTOP + TOUCH MOBILE) ===================== */
+    /* Mobile-Compatible Drag, Resize, and Rotate Handlers */
     function makeDraggableResizableRotatable(el, resizeHandle, rotateHandle, item) {
       let startX, startY, startLeft, startTop;
 
-      function getPos(e) {
-        if (e.touches && e.touches.length > 0) {
-          return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        }
-        return { x: e.clientX, y: e.clientY };
-      }
-
-      // --- DRAGGING ---
       function startDrag(e) {
         if (e.target === resizeHandle || e.target === rotateHandle || isLayoutLocked) return;
         e.stopPropagation();
         el.classList.add('dragging');
-        
-        const pos = getPos(e);
-        startX = pos.x; 
-        startY = pos.y;
-        startLeft = item.x; 
-        startTop = item.y;
+        const pos = getPointerPos(e);
+        startX = pos.x; startY = pos.y;
+        startLeft = item.x; startTop = item.y;
 
-        function onMove(evt) {
-          const currentPos = getPos(evt);
+        function onMove(e) {
+          const currentPos = getPointerPos(e);
           const dx = (currentPos.x - startX) / zoomLevel;
           const dy = (currentPos.y - startY) / zoomLevel;
           item.x = snapToGrid(startLeft + dx);
@@ -1250,22 +1260,16 @@
         window.addEventListener('touchend', onEnd);
       }
 
-      el.addEventListener('mousedown', startDrag);
-      el.addEventListener('touchstart', startDrag, { passive: false });
-
-      // --- RESIZING ---
       function startResize(e) {
         if (isLayoutLocked) return;
         e.stopPropagation();
         el.classList.add('resizing');
-        
-        const pos = getPos(e);
-        startX = pos.x; 
-        startY = pos.y;
+        const pos = getPointerPos(e);
+        startX = pos.x; startY = pos.y;
         const startW = item.w, startH = item.h;
 
-        function onMove(evt) {
-          const currentPos = getPos(evt);
+        function onMove(e) {
+          const currentPos = getPointerPos(e);
           const dx = (currentPos.x - startX) / zoomLevel;
           const dy = (currentPos.y - startY) / zoomLevel;
           item.w = Math.max(GRID_SIZE * 2, snapToGrid(startW + dx));
@@ -1289,10 +1293,6 @@
         window.addEventListener('touchend', onEnd);
       }
 
-      resizeHandle.addEventListener('mousedown', startResize);
-      resizeHandle.addEventListener('touchstart', startResize, { passive: false });
-
-      // --- ROTATING ---
       function startRotate(e) {
         if (isLayoutLocked) return;
         e.stopPropagation();
@@ -1301,11 +1301,11 @@
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
 
-        function onMove(evt) {
-          const currentPos = getPos(evt);
+        function onMove(e) {
+          const currentPos = getPointerPos(e);
           const radians = Math.atan2(currentPos.x - centerX, -(currentPos.y - centerY));
           let degrees = Math.round(radians * (180 / Math.PI));
-          if (evt.shiftKey) degrees = Math.round(degrees / 15) * 15;
+          if (e.shiftKey) degrees = Math.round(degrees / 15) * 15;
           item.rotation = degrees;
           el.style.transform = `rotate(${degrees}deg)`;
         }
@@ -1324,6 +1324,12 @@
         window.addEventListener('touchmove', onMove, { passive: false });
         window.addEventListener('touchend', onEnd);
       }
+
+      el.addEventListener('mousedown', startDrag);
+      el.addEventListener('touchstart', startDrag, { passive: false });
+
+      resizeHandle.addEventListener('mousedown', startResize);
+      resizeHandle.addEventListener('touchstart', startResize, { passive: false });
 
       rotateHandle.addEventListener('mousedown', startRotate);
       rotateHandle.addEventListener('touchstart', startRotate, { passive: false });
