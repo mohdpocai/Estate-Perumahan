@@ -168,6 +168,13 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .loc-row:hover{background:var(--bg)}.loc-row small{color:var(--mut)}
 @media(max-width:760px){.sum-row.four{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.brand-text{display:none}#app-header{flex-wrap:wrap;padding:10px 12px}#headerSearch{order:9;flex-basis:100%}.view-tab{padding:7px 10px}.def-fields,.sum-row{grid-template-columns:1fr 1fr}}
+/* detail window paging */
+.modal-nav{display:none;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-top:1px solid var(--line);background:var(--sf);border-radius:0 0 16px 16px;flex-shrink:0}
+.modal-nav .btn{min-width:108px;padding:11px 12px}
+.modal-nav .btn:disabled{opacity:.4;cursor:default}
+.nav-mid{text-align:center;min-width:0;flex:1}
+.nav-mid b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-mid span{font-size:11px;color:var(--mut)}
 /* door overview (top of detail window) */
 .door-ov{margin:12px 0}
 .door-ov-head{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--mut);margin-bottom:6px}
@@ -308,6 +315,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         <button class="btn-close-modal" onclick="closeDetailModal()">✖</button>
       </div>
       <div class="modal-body" id="detailModalContent"></div>
+      <div class="modal-nav" id="detailModalNav"></div>
     </div>
   </div>
 
@@ -1363,6 +1371,50 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       return `<div class="${titleClass}">${titleText}</div>${rows}`;
     }
 
+    let detailPage = 0, detailPageItemId = null;
+
+    function renderDoorCard(item, index) {
+      const door = item.doors[index];
+      if (!door.checklist) door.checklist = {};
+      if (!door.defects) door.defects = {};
+      const doorTitle = door.label && door.label.trim() ? door.label : `PINTU ${index + 1}`;
+      return `
+        <div class="door-card">
+          <div class="door-card-title">${escapeHTML(doorTitle)}${countDoorReplace(door) ? ` <span class="badge st-prog">⚠️ ${countDoorReplace(door)} perlu ganti / rosak</span>` : ''}</div>
+          <input type="text" class="door-name-input" value="${escapeHTML(door.label || '')}" maxlength="40" placeholder="Nama pintu/bilik (cth: Bilik A) — pilihan" onchange="updateDoorData('${item.id}', ${index}, 'label', this.value)">
+          <div class="form-group">
+            <label>Nama Penghuni:</label>
+            <input type="text" value="${escapeHTML(door.nama || '')}" maxlength="50" placeholder="Nama pekerja..." onchange="updateDoorData('${item.id}', ${index}, 'nama', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Jumlah Penghuni:</label>
+            <input type="number" min="0" max="20" value="${door.jumlah || '1'}" onchange="updateDoorData('${item.id}', ${index}, 'jumlah', this.value)">
+          </div>
+          ${renderChecklistSection(item.id, index, door, 'checklist', 'checklist-title', 'Rekod Kelengkapan & Penggantian:', ITEMS_CHECKLIST)}
+          ${renderChecklistSection(item.id, index, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}
+        </div>
+      `;
+    }
+
+    function goDetailPage(n) {
+      if (!detailPageItemId) return;
+      detailPage = n;
+      openDetailModal(detailPageItemId);
+      document.getElementById('detailModalContent').scrollTop = 0;
+    }
+
+    function renderDetailNav(item, totalPages) {
+      const nav = document.getElementById('detailModalNav');
+      if (totalPages <= 1) { nav.style.display = 'none'; nav.innerHTML = ''; return; }
+      const door = detailPage > 0 ? item.doors[detailPage - 1] : null;
+      const label = detailPage === 0 ? 'Ringkasan' : (door.label && door.label.trim() ? door.label : 'Pintu ' + detailPage);
+      nav.style.display = 'flex';
+      nav.innerHTML = `
+        <button class="btn" ${detailPage === 0 ? 'disabled' : ''} onclick="goDetailPage(${detailPage - 1})">‹ Sebelum</button>
+        <div class="nav-mid"><b>${escapeHTML(label)}</b><span>Halaman ${detailPage + 1} / ${totalPages}</span></div>
+        <button class="btn pri" ${detailPage >= totalPages - 1 ? 'disabled' : ''} onclick="goDetailPage(${detailPage + 1})">Seterusnya ›</button>`;
+    }
+
     function doorStatus(door) {
       let rosak = false, ganti = false;
       Object.values(door.defects || {}).forEach(e => { if (isOpenDefect(e)) rosak = true; });
@@ -1383,7 +1435,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         const vacant = !(d.nama && d.nama.trim());
         const label = d.label && d.label.trim() ? d.label : 'Pintu ' + (i + 1);
         const flag = st === 'rosak' ? '⚠️ Rosak / kerosakan' : st === 'ganti' ? '🔧 Perlu ganti' : '';
-        return `<div class="door-tile st-${st} ${vacant ? 'vacant' : ''}" onclick="document.getElementById('door-${item.id}-${i}').scrollIntoView({behavior:'smooth',block:'start'})">
+        return `<div class="door-tile st-${st} ${vacant ? 'vacant' : ''}" onclick="goDetailPage(${i + 1})">
           <div class="dt-label">${escapeHTML(label)}</div>
           <div class="dt-name">${vacant ? 'Kosong' : escapeHTML(d.nama.trim())}</div>
           ${flag ? `<div class="dt-flag">${flag}</div>` : ''}
@@ -1404,64 +1456,50 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       const config = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG.jalan;
       document.getElementById('detailModalTitle').textContent = `${config.icon} ${item.name || config.label}`;
 
-      let formHTML = `
-        <div class="rename-field">
-          <input type="text" value="${escapeHTML(item.name || config.label)}" maxlength="60" placeholder="${escapeHTML(config.label)}" onchange="updateBuildingName('${item.id}', this.value)">
-        </div>
-        <div class="card-sub" style="margin:-8px 0 10px 2px;">${config.label}</div>
-        <button class="btn-action btn-pdf" onclick="exportPDF('${item.id}')">📄 Eksport PDF ${item.type === 'road' ? 'Jalan Ini' : 'Bangunan Ini'}</button>
-      `;
-
-      if (item.type === 'building' && item.category === 'pekerja') formHTML += doorOverview(item);
-
-      const flagged = replaceList(item);
-      if (flagged.length) {
-        formHTML += `<div class="warn-banner"><b>⚠️ ${flagged.length} barang perlu diganti / rosak</b><br>${flagged.map(f => `${escapeHTML(f.door)}: ${f.label} (${f.k === 'rosak' ? 'Rosak' : 'Perlu Diganti'})`).join('<br>')}</div>`;
+      const isPekerja = item.type === 'building' && item.category === 'pekerja';
+      if (isPekerja && (!item.doors || item.doors.length === 0)) {
+        item.doors = Array.from({ length: item.doorCount || 6 }, createDefaultDoor);
       }
+      const totalPages = isPekerja ? item.doors.length + 1 : 1;
+      if (item.id !== detailPageItemId) { detailPage = 0; detailPageItemId = item.id; }
+      detailPage = Math.max(0, Math.min(detailPage, totalPages - 1));
 
-      if (item.type === 'building' && item.category === 'pekerja') {
-        formHTML += `<hr style="border-color:#334155; margin:12px 0;"><h4 style="margin:0 0 10px 0; color:#10B981;">Maklumat ${item.doors.length} Pintu</h4>`;
+      let formHTML = '';
 
-        if (!item.doors || item.doors.length === 0) {
-          item.doors = Array.from({ length: item.doorCount || 6 }, createDefaultDoor);
+      if (isPekerja && detailPage > 0) {
+        // one page per door
+        formHTML += renderDoorCard(item, detailPage - 1);
+      } else {
+        formHTML += `
+          <div class="rename-field">
+            <input type="text" value="${escapeHTML(item.name || config.label)}" maxlength="60" placeholder="${escapeHTML(config.label)}" onchange="updateBuildingName('${item.id}', this.value)">
+          </div>
+          <div class="card-sub" style="margin:-8px 0 10px 2px;">${config.label}</div>
+          <button class="btn-action btn-pdf" onclick="exportPDF('${item.id}')">📄 Eksport PDF ${item.type === 'road' ? 'Jalan Ini' : 'Bangunan Ini'}</button>
+        `;
+
+        if (isPekerja) formHTML += doorOverview(item);
+
+        const flagged = replaceList(item);
+        if (flagged.length) {
+          formHTML += `<div class="warn-banner"><b>⚠️ ${flagged.length} barang perlu diganti / rosak</b><br>${flagged.map(f => `${escapeHTML(f.door)}: ${f.label} (${f.k === 'rosak' ? 'Rosak' : 'Perlu Diganti'})`).join('<br>')}</div>`;
         }
 
-        item.doors.forEach((door, index) => {
-          if (!door.checklist) door.checklist = {};
-          if (!door.defects) door.defects = {};
-          const doorTitle = door.label && door.label.trim() ? door.label : `PINTU ${index + 1}`;
-
+        if (isPekerja) {
           formHTML += `
-            <div class="door-card" id="door-${item.id}-${index}">
-              <div class="door-card-title">${escapeHTML(doorTitle)}${countDoorReplace(door) ? ` <span class="badge st-prog">⚠️ ${countDoorReplace(door)} perlu ganti / rosak</span>` : ''}</div>
-              <input type="text" class="door-name-input" value="${escapeHTML(door.label || '')}" maxlength="40" placeholder="Nama pintu/bilik (cth: Bilik A) — pilihan" onchange="updateDoorData('${item.id}', ${index}, 'label', this.value)">
-              <div class="form-group">
-                <label>Nama Penghuni:</label>
-                <input type="text" value="${escapeHTML(door.nama || '')}" maxlength="50" placeholder="Nama pekerja..." onchange="updateDoorData('${item.id}', ${index}, 'nama', this.value)">
-              </div>
-              <div class="form-group">
-                <label>Jumlah Penghuni:</label>
-                <input type="number" min="0" max="20" value="${door.jumlah || '1'}" onchange="updateDoorData('${item.id}', ${index}, 'jumlah', this.value)">
-              </div>
-              ${renderChecklistSection(item.id, index, door, 'checklist', 'checklist-title', 'Rekod Kelengkapan & Penggantian:', ITEMS_CHECKLIST)}
-              ${renderChecklistSection(item.id, index, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}
+            <div class="door-actions-row">
+              <button class="btn-door-add" onclick="addDoorToBuilding('${item.id}')">➕ Tambah Pintu</button>
+              <button class="btn-door-remove" onclick="removeLastDoor('${item.id}')">➖ Buang Pintu Terakhir</button>
             </div>
           `;
-        });
+        } else {
+          formHTML += `<div class="door-card" style="margin-top:12px;"><div class="door-card-title">Laporan Kerosakan & Tindakan</div>${renderChecklistSection(item.id, -1, item, 'defects', 'checklist-title-defect', 'Senarai Semak Kerosakan:', checklistFor(item))}</div>`;
+        }
 
-        formHTML += `
-          <div class="door-actions-row">
-            <button class="btn-door-add" onclick="addDoorToBuilding('${item.id}')">➕ Tambah Pintu</button>
-            <button class="btn-door-remove" onclick="removeLastDoor('${item.id}')">➖ Buang Pintu Terakhir</button>
-          </div>
-        `;
+        formHTML += `<button class="btn-action btn-delete" onclick="deleteElement('${item.id}')">🗑️ Padam Elemen</button>`;
       }
 
-      if (item.category !== 'pekerja') {
-        formHTML += `<div class="door-card" style="margin-top:12px;"><div class="door-card-title">Laporan Kerosakan & Tindakan</div>${renderChecklistSection(item.id, -1, item, 'defects', 'checklist-title-defect', 'Senarai Semak Kerosakan:', checklistFor(item))}</div>`;
-      }
-
-      formHTML += `<button class="btn-action btn-delete" onclick="deleteElement('${item.id}')">🗑️ Padam Elemen</button>`;
+      renderDetailNav(item, totalPages);
       document.getElementById('detailModalContent').innerHTML = formHTML;
       document.getElementById('detailModalBackdrop').classList.add('open');
       loadMissingPhotos();
@@ -1504,6 +1542,8 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 
     function closeDetailModal() {
       document.getElementById('detailModalBackdrop').classList.remove('open');
+      detailPageItemId = null;
+      detailPage = 0;
     }
 
     function updateDoorData(id, doorIndex, field, value) {
