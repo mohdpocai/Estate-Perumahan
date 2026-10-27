@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ringkasan Kelengkapan - LP2</title>
+  <!-- Firebase (compat SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <link rel="stylesheet" href="shared.css?v=3">
+</head>
+<body>
+
+  <div id="login-overlay">
+    <div class="login-box">
+      <h2>🏘️ Pengurusan LP2</h2>
+      <p id="loginMessage">Sila log masuk untuk mengakses rekod.</p>
+      <div id="loginForm">
+        <input type="email" id="loginEmail" placeholder="Emel" autocomplete="username">
+        <input type="password" id="loginPassword" placeholder="Kata laluan" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin()">
+        <button onclick="doLogin()">Log Masuk</button>
+      </div>
+      <div id="loginError"></div>
+    </div>
+  </div>
+
+  <div id="app-container">
+    <header id="app-header">
+      <div class="brand"><span class="logo">LP2</span><span class="brand-text">Pengurusan Rumah Pekerja</span></div>
+      <select id="layoutSelect" onchange="changeLayout(this.value)" title="Pilih layout"></select>
+      <div class="nav-dd">
+        <button class="nav-dd-btn" onclick="toggleNavDd(event)"><span>📊 Ringkasan</span> ▾</button>
+        <div class="nav-dd-menu" id="navDdMenu">
+          <a href="kerosakan.html">⚠️ Kerosakan <span class="tab-count" id="defectCount">0</span></a>
+          <a class="active" href="ringkasan.html">📊 Ringkasan</a>
+          <hr>
+          <div class="dd-sub">Pengurusan rumah</div>
+          <a data-main="#list" href="#">📋 Senarai</a>
+          <a data-main="#map" href="#">🗺️ Pelan</a>
+        </div>
+      </div>
+      <input type="text" id="headerSearch" placeholder="Cari pekerja, bangunan atau kerosakan..." oninput="onSearchInput()">
+      <span id="syncStatus">...</span>
+      <button class="icon-btn" onclick="doLogout()" title="Log Keluar">⎋</button>
+    </header>
+
+    <div id="summaryView" class="page-view"><div id="summaryScroll"></div></div>
+  </div>
+
+  <script src="shared.js?v=3"></script>
+  <script>
+const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
+
+    function allEquip() {
+      const out = [];
+      elements.forEach(item => (item.doors || []).forEach((door, di) => ITEMS_CHECKLIST.forEach(chk => {
+        const e = door.checklist && door.checklist[chk.key];
+        if (e && e.status) out.push({ item, door, di, chk, e });
+      })));
+      return out;
+    }
+    let sumFilter = 'semua';
+    function setSumFilter(f) { sumFilter = (sumFilter === f ? 'semua' : f); renderSummary(); }
+    function renderSummary() {
+      const q = searchQuery;
+      const cond = r => r.e.keadaan || 'baik';
+      const match = r => !q || [r.item.name, r.door.nama, r.door.label, r.chk.label].some(t => t && String(t).toLowerCase().includes(q));
+      const recorded = allEquip().filter(match);
+      const bad = recorded.filter(r => cond(r) !== 'baik');
+      const n = k => bad.filter(r => cond(r) === k).length;
+      const shown = bad.filter(r => sumFilter === 'semua' || cond(r) === sumFilter);
+      const card = (k, v, l, c) => `<div class="sum-card ${sumFilter === k ? 'on' : ''}" onclick="setSumFilter('${k}')"><b style="color:${c}">${v}</b><span>${l}</span></div>`;
+      let html = `<div class="sum-row">${card('semua', bad.length, 'Perlu tindakan', 'var(--ink)')}${card('rosak', n('rosak'), 'Rosak', 'var(--bad)')}${card('ganti', n('ganti'), 'Perlu diganti', 'var(--warn)')}</div>
+        <div class="def-meta" style="margin-top:-4px;">${recorded.length - bad.length} daripada ${recorded.length} barang direkod dalam keadaan baik</div>`;
+      if (!shown.length) html += `<div class="empty-state">${recorded.length ? 'Tiada barang rosak atau perlu diganti. 🎉' : 'Tiada rekod kelengkapan' + (q ? ' yang sepadan' : '') + '.'}</div>`;
+      const order = { rosak: 0, ganti: 1 };
+      html += ITEMS_CHECKLIST.map(chk => {
+        const rows = shown.filter(r => r.chk.key === chk.key).sort((x, y) => order[cond(x)] - order[cond(y)]);
+        if (!rows.length) return '';
+        const g = rows.filter(r => cond(r) === 'ganti').length, r2 = rows.length - g;
+        return `<div class="sum-item">
+          <div style="padding:14px 16px;">
+            <div class="sum-head"><span>${chk.label}</span><span>${rows.length} unit</span></div>
+            <div class="sum-counts">${r2 ? r2 + ' rosak' : ''}${r2 && g ? ' • ' : ''}${g ? g + ' perlu diganti' : ''}</div>
+          </div>
+          ${rows.map(r => {
+            const c = cond(r);
+            return `<div class="loc-row" onclick="location.href='${MAIN_URL}?open=${encodeURIComponent(r.item.id)}'">
+              <div>${escapeHTML(r.item.name || 'Rumah')} • ${escapeHTML(r.door.label || 'Pintu ' + (r.di + 1))}<br><small>${r.door.nama ? escapeHTML(r.door.nama) + ' • ' : ''}Tarikh: ${r.e.tarikh || '-'}</small></div>
+              <span class="badge ${c === 'rosak' ? 'st-new' : 'st-prog'}">${COND[c]}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }).join('');
+      document.getElementById('summaryScroll').innerHTML = html;
+    }
+
+function renderPage() {
+  updateDefectBadge();
+  renderSummary();
+}
+
+/* ===================== INIT ===================== */
+initFirebase();
+  </script>
+</body>
+</html>
