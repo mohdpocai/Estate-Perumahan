@@ -93,8 +93,28 @@ function createDefaultDoor() {
       };
     }
 
+    /* defects that belong in the permanent log: ticked ones, plus completed (Selesai) ones even after unticking */
+    function recordedDefects() {
+      const out = [];
+      const keep = e => e && (e.status || (e.tindakan === 'selesai' && e.tarikh));
+      elements.forEach(item => {
+        if (item.category === 'pekerja') return;
+        checklistFor(item).forEach(chk => {
+          const e = item.defects && item.defects[chk.key];
+          if (keep(e)) out.push({ item, door: null, di: -1, chk, e });
+        });
+      });
+      elements.forEach(item => (item.doors || []).forEach((door, di) => {
+        DEFECT_CHECKLIST.forEach(chk => {
+          const e = door.defects && door.defects[chk.key];
+          if (keep(e)) out.push({ item, door, di, chk, e });
+        });
+      }));
+      return out;
+    }
+
     function ensureLogIds() {
-      allDefects().forEach(d => {
+      recordedDefects().forEach(d => {
         if (d.e.logId) return;
         const legacy = legacyLogId(d.item, d.di, d.chk.key);
         d.e.logId = defectLog[legacy] ? 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : legacy;
@@ -105,7 +125,7 @@ function createDefaultDoor() {
       const out = {};
       const base = 'layouts/' + currentLayoutId + '/defectLog/';
       const now = new Date().toISOString();
-      allDefects().forEach(d => {
+      recordedDefects().forEach(d => {
         const snap = defectSnapshot(d);
         const json = stableJson(snap);
         if (lastLogJson[snap.id] === json) return;
@@ -117,7 +137,7 @@ function createDefaultDoor() {
     }
 
     function backfillLog() {
-      if (logLoaded && allDefects().some(d => !d.e.logId)) saveToStorage();
+      if (logLoaded && recordedDefects().some(d => !d.e.logId)) saveToStorage();
     }
 
     function attachLogListener() {

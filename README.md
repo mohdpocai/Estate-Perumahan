@@ -26,7 +26,8 @@ photos/<photoId>                            compressed photos (referenced by id)
 - Tick a defect in a building (`index.html`) → saved on the building **and** copied to `defectLog`.
 - `kerosakan.html` reads `defectLog` + the live buildings. Status changes update both.
 - Records are never removed automatically: unticking, completing, repeating a defect, or deleting a door/building keeps the record and its photos. Only **Padam rekod** (or deleting a whole layout) removes them.
-- A completed (Selesai) defect that happens again becomes a **new** record; the old one stays.
+- When a defect is marked **Selesai** (Kerosakan page or the Status Tindakan dropdown in the building window) it is automatically **unticked** in the building, ready for the next inspection. Its record stays as a finished repair, with **Buka Semula** if it needs to be reopened.
+- A completed defect that happens again (ticked at the next inspection) becomes a **new** record; the old one stays.
 
 ## Navigation
 

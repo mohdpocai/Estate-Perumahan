@@ -83,6 +83,7 @@
       e.catatanTindakan = AUTO_NOTE[status] || '';
       if (status === 'proses' && !e.tarikhTindakan) e.tarikhTindakan = todayStr();
       if (status === 'selesai') e.tarikhSelesai = todayStr(); else delete e.tarikhSelesai;
+      if (status === 'selesai') e.status = false;   // finished: untick it in the building, ready for the next inspection (the record stays)
       afterDefectChange(id);
     }
     function setDefectField(id, di, key, field, val) {
@@ -111,7 +112,7 @@
     function allRecords() {
       const recs = Object.assign({}, defectLog);
       // defects not yet written to the log (just reported / not yet backfilled) are still shown
-      allDefects().forEach(d => { const snap = defectSnapshot(d); if (!recs[snap.id]) recs[snap.id] = snap; });
+      recordedDefects().forEach(d => { const snap = defectSnapshot(d); if (!recs[snap.id]) recs[snap.id] = snap; });
       return Object.keys(recs).map(id => Object.assign({ id }, recs[id]));
     }
 
@@ -121,12 +122,21 @@
       const e = active ? live.entry : r;
       const st = active ? defStatus(live.entry) : (DEF_STATUS[r.tindakan] ? r.tindakan : 'baru');
       const gone = !live.item || (r.di !== -1 && !live.holder);
-      const why = active ? '' : (gone ? 'Bangunan / pintu telah dibuang' : 'Telah dinyahtanda daripada bangunan');
+      const finished = !active && st === 'selesai' && !gone;      // completed repair, defect unticked for the next inspection
+      const why = active || finished ? '' : (gone ? 'Bangunan / pintu telah dibuang' : 'Telah dinyahtanda daripada bangunan');
       const cat = (!active && st !== 'selesai') ? 'tidakaktif' : st;
       const where = r.door
         ? `${escapeHTML(r.building || 'Bangunan')} • ${escapeHTML(r.door)}${r.penghuni ? ' • ' + escapeHTML(r.penghuni) : ''}`
         : escapeHTML(r.building || 'Elemen');
-      return { r, e, st, active, why, cat, where };
+      return { r, e, st, active, why, cat, where, canReopen: !!(finished && live.entry) };
+    }
+
+    function reopenDefect(id) {
+      const r = allRecords().find(x => x.id === id);
+      const live = r && findLive(r);
+      if (!live || !live.entry) return;
+      live.entry.status = true;                       // tick it again on the building ...
+      setDefectAction(r.itemId, r.di, r.key, 'baru'); // ... and set it back to Baharu (same record)
     }
 
     function deleteDefectRecord(id) {
@@ -170,7 +180,7 @@
         </div>`;
       if (!list.length) html += `<div class="empty-state">Tiada rekod kerosakan dalam paparan ini. 🎉</div>`;
       html += list.map(v => {
-        const { r, e, st, active, why, where } = v, S = DEF_STATUS[st];
+        const { r, e, st, active, why, where, canReopen } = v, S = DEF_STATUS[st];
         const k = `'${r.itemId}', ${r.di}, '${r.key}'`;
         const del = `<button class="btn" style="color:var(--bad);" onclick="deleteDefectRecord('${r.id}')">🗑️ Padam rekod</button>`;
         const meta = `Dilaporkan: ${e.tarikh || '-'} • ${daysOpen(e)}${e.catatan ? '<br>' + escapeHTML(e.catatan) : ''}`;
@@ -183,10 +193,10 @@
               </div>
               <div style="text-align:right;"><span class="badge ${S.c}">${S.l}</span></div>
             </div>
-            <div class="def-meta">${meta}<br><span style="color:var(--warn);font-weight:600;">⚠ ${why}</span></div>
+            <div class="def-meta">${meta}${why ? `<br><span style="color:var(--warn);font-weight:600;">⚠ ${why}</span>` : (st === 'selesai' ? `<br><span style="color:var(--ok);font-weight:600;">✔ Dibaiki${e.tarikhSelesai ? ' pada ' + e.tarikhSelesai : ''} — dinyahtanda di bangunan, sedia untuk pemeriksaan seterusnya</span>` : '')}</div>
             ${(e.pihak || e.catatanTindakan) ? `<div class="def-meta">${e.pihak ? '👷 ' + escapeHTML(e.pihak) : ''}${e.pihak && e.catatanTindakan ? ' • ' : ''}${e.catatanTindakan ? '📝 ' + escapeHTML(e.catatanTindakan) : ''}</div>` : ''}
             ${e.gambarTindakan ? `<div class="def-meta">Bukti tindakan:<br>${photoThumb(e.gambarTindakan, 'def-thumb')}</div>` : ''}
-            <div class="def-actions">${del}</div>
+            <div class="def-actions">${canReopen ? `<button class="btn" onclick="reopenDefect('${r.id}')">↺ Buka Semula</button>` : ''}${del}</div>
           </div>`;
         }
         const btns = st === 'baru' ? `<button class="btn pri" onclick="setDefectAction(${k}, 'proses')">▶ Mula Tindakan</button><button class="btn ok" onclick="setDefectAction(${k}, 'selesai')">✔ Selesai</button>`
