@@ -168,6 +168,16 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .loc-row:hover{background:var(--bg)}.loc-row small{color:var(--mut)}
 @media(max-width:760px){.sum-row.four{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.brand-text{display:none}#app-header{flex-wrap:wrap;padding:10px 12px}#headerSearch{order:9;flex-basis:100%}.view-tab{padding:7px 10px}.def-fields,.sum-row{grid-template-columns:1fr 1fr}}
+/* header page dropdown */
+.nav-dd{position:relative;flex-shrink:0}
+.nav-dd-btn{background:#fff;color:var(--nav);border:0;border-radius:9px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:inherit}
+.nav-dd-menu{display:none;position:absolute;left:0;top:42px;background:#fff;color:var(--ink);border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.25);min-width:210px;padding:6px;z-index:500}
+.nav-dd-menu.open{display:block}
+.nav-dd-menu button,.nav-dd-menu a{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;background:none;border:0;padding:11px 12px;border-radius:7px;font-size:14px;cursor:pointer;color:var(--ink);text-decoration:none;font-family:inherit}
+.nav-dd-menu button:hover,.nav-dd-menu a:hover{background:var(--bg)}
+.nav-dd-menu .active{background:#EAF2FB;color:var(--brand);font-weight:700}
+.nav-dd-menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.nav-dd-menu .dd-sub{font-size:11px;color:var(--mut);padding:6px 12px 2px;text-transform:uppercase;letter-spacing:.4px}
 /* detail window paging */
 .modal-nav{display:none;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-top:1px solid var(--line);background:var(--sf);border-radius:0 0 16px 16px;flex-shrink:0}
 .modal-nav .btn{min-width:108px;padding:11px 12px}
@@ -228,10 +238,13 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
     <header id="app-header">
       <div class="brand"><span class="logo">LP2</span><span class="brand-text">Pengurusan Rumah Pekerja</span></div>
       <select id="layoutSelect" onchange="changeLayout(this.value)" title="Pilih layout"></select>
-      <nav class="view-tabs">
-        <button class="view-tab active" id="tabList" onclick="switchView('list')">Senarai</button>
-        <button class="view-tab" id="tabMap" onclick="switchView('map')">Pelan</button>
-      </nav>
+      <div class="nav-dd">
+        <button class="nav-dd-btn" onclick="toggleNavDd(event)"><span id="navDdLabel">📋 Senarai</span> ▾</button>
+        <div class="nav-dd-menu" id="navDdMenu">
+          <button id="tabList" class="active" onclick="switchView('list')">📋 Senarai</button>
+          <button id="tabMap" onclick="switchView('map')">🗺️ Pelan</button>
+        </div>
+      </div>
       <input type="text" id="headerSearch" placeholder="Cari pekerja, bangunan atau kerosakan..." oninput="onSearchInput()">
       <span id="syncStatus">...</span>
       <div class="menu-wrap">
@@ -421,6 +434,8 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       document.getElementById('listView').style.display = view === 'list' ? 'flex' : 'none';
       document.getElementById('mapView').style.display = view === 'map' ? 'block' : 'none';
       document.getElementById('tabList').classList.toggle('active', view === 'list');
+      document.getElementById('navDdLabel').textContent = view === 'list' ? '📋 Senarai' : '🗺️ Pelan';
+      document.getElementById('navDdMenu').classList.remove('open');
       document.getElementById('tabMap').classList.toggle('active', view === 'map');
       renderAll();
     }
@@ -1892,8 +1907,9 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       saveToStorage();
     }
     /* ===================== HEADER MENU ===================== */
-    function toggleMenu(ev) { ev.stopPropagation(); document.getElementById('mainMenu').classList.toggle('open'); }
-    document.addEventListener('click', () => document.getElementById('mainMenu').classList.remove('open'));
+    function toggleMenu(ev) { ev.stopPropagation(); document.getElementById('navDdMenu').classList.remove('open'); document.getElementById('mainMenu').classList.toggle('open'); }
+    function toggleNavDd(ev) { ev.stopPropagation(); document.getElementById('mainMenu').classList.remove('open'); document.getElementById('navDdMenu').classList.toggle('open'); }
+    document.addEventListener('click', () => { document.getElementById('mainMenu').classList.remove('open'); document.getElementById('navDdMenu').classList.remove('open'); });
 
     /* ===================== INIT ===================== */
     updateLockUI();
