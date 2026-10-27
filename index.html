@@ -168,6 +168,24 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .loc-row:hover{background:var(--bg)}.loc-row small{color:var(--mut)}
 @media(max-width:760px){.sum-row.four{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.brand-text{display:none}#app-header{flex-wrap:wrap;padding:10px 12px}#headerSearch{order:9;flex-basis:100%}.view-tab{padding:7px 10px}.def-fields,.sum-row{grid-template-columns:1fr 1fr}}
+/* door overview (top of detail window) */
+.door-ov{margin:12px 0}
+.door-ov-head{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--mut);margin-bottom:6px}
+.door-ov-head b{color:var(--ink);font-size:13px}
+.door-ov-grid{display:grid;gap:8px}
+.door-tile{border:1px solid var(--line);border-left:4px solid var(--ok);background:#F0FDF4;border-radius:8px;padding:8px 10px;cursor:pointer;min-width:0}
+.door-tile.st-ganti{border-left-color:#D97706;background:#FFFBEB}
+.door-tile.st-rosak{border-left-color:var(--bad);background:#FEF2F2}
+.door-tile.vacant{border-style:dashed;border-left-style:solid;background:#F8FAFC}
+.door-tile.vacant.st-ganti{background:#FFFBEB}.door-tile.vacant.st-rosak{background:#FEF2F2}
+.door-tile.vacant:not(.st-ganti):not(.st-rosak){border-left-color:#CBD5E1}
+.door-tile .dt-label{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.door-tile .dt-name{font-size:13px;font-weight:600;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.door-tile.vacant .dt-name{color:var(--mut);font-weight:500;font-style:italic}
+.door-tile .dt-flag{font-size:11px;font-weight:600;margin-top:2px}
+.door-tile.st-rosak .dt-flag{color:var(--bad)}.door-tile.st-ganti .dt-flag{color:var(--warn)}
+.door-ov-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:6px}
+.door-ov-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -1345,6 +1363,39 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       return `<div class="${titleClass}">${titleText}</div>${rows}`;
     }
 
+    function doorStatus(door) {
+      let rosak = false, ganti = false;
+      Object.values(door.defects || {}).forEach(e => { if (isOpenDefect(e)) rosak = true; });
+      Object.values(door.checklist || {}).forEach(e => {
+        if (e && e.status && e.keadaan === 'rosak') rosak = true;
+        else if (e && e.status && e.keadaan === 'ganti') ganti = true;
+      });
+      return rosak ? 'rosak' : ganti ? 'ganti' : 'ok';
+    }
+
+    function doorOverview(item) {
+      const doors = item.doors || [];
+      if (!doors.length) return '';
+      const filled = doors.filter(d => d.nama && d.nama.trim()).length;
+      const cols = doors.length === 4 ? 2 : 3;
+      const tiles = doors.map((d, i) => {
+        const st = doorStatus(d);
+        const vacant = !(d.nama && d.nama.trim());
+        const label = d.label && d.label.trim() ? d.label : 'Pintu ' + (i + 1);
+        const flag = st === 'rosak' ? '⚠️ Rosak / kerosakan' : st === 'ganti' ? '🔧 Perlu ganti' : '';
+        return `<div class="door-tile st-${st} ${vacant ? 'vacant' : ''}" onclick="document.getElementById('door-${item.id}-${i}').scrollIntoView({behavior:'smooth',block:'start'})">
+          <div class="dt-label">${escapeHTML(label)}</div>
+          <div class="dt-name">${vacant ? 'Kosong' : escapeHTML(d.nama.trim())}</div>
+          ${flag ? `<div class="dt-flag">${flag}</div>` : ''}
+        </div>`;
+      }).join('');
+      return `<div class="door-ov">
+        <div class="door-ov-head"><b>Ringkasan Pintu</b><span>${filled} / ${doors.length} berpenghuni</span></div>
+        <div class="door-ov-grid" style="grid-template-columns:repeat(${cols},minmax(0,1fr));">${tiles}</div>
+        <div class="door-ov-legend"><span><i style="background:var(--ok)"></i>Baik</span><span><i style="background:#D97706"></i>Perlu ganti</span><span><i style="background:var(--bad)"></i>Rosak / kerosakan</span><span><i style="background:#CBD5E1"></i>Kosong</span></div>
+      </div>`;
+    }
+
     function openDetailModal(id) {
       selectedId = id;
       const item = elements.find(e => e.id === id);
@@ -1360,6 +1411,8 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         <div class="card-sub" style="margin:-8px 0 10px 2px;">${config.label}</div>
         <button class="btn-action btn-pdf" onclick="exportPDF('${item.id}')">📄 Eksport PDF ${item.type === 'road' ? 'Jalan Ini' : 'Bangunan Ini'}</button>
       `;
+
+      if (item.type === 'building' && item.category === 'pekerja') formHTML += doorOverview(item);
 
       const flagged = replaceList(item);
       if (flagged.length) {
@@ -1379,7 +1432,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
           const doorTitle = door.label && door.label.trim() ? door.label : `PINTU ${index + 1}`;
 
           formHTML += `
-            <div class="door-card">
+            <div class="door-card" id="door-${item.id}-${index}">
               <div class="door-card-title">${escapeHTML(doorTitle)}${countDoorReplace(door) ? ` <span class="badge st-prog">⚠️ ${countDoorReplace(door)} perlu ganti / rosak</span>` : ''}</div>
               <input type="text" class="door-name-input" value="${escapeHTML(door.label || '')}" maxlength="40" placeholder="Nama pintu/bilik (cth: Bilik A) — pilihan" onchange="updateDoorData('${item.id}', ${index}, 'label', this.value)">
               <div class="form-group">
