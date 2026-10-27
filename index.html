@@ -38,6 +38,7 @@ button,input,select{font-family:inherit}
 .menu.open{display:block}
 .menu button{display:block;width:100%;text-align:left;background:none;border:0;padding:10px 12px;border-radius:7px;font-size:13px;cursor:pointer;color:var(--ink)}
 .menu button:hover{background:var(--bg)}
+.menu button.locked{color:var(--bad);font-weight:700}
 .menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .btn-import-local{display:none}
 /* list */
@@ -243,6 +244,9 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         <div class="nav-dd-menu" id="navDdMenu">
           <button id="tabList" class="active" onclick="switchView('list')">📋 Senarai</button>
           <button id="tabMap" onclick="switchView('map')">🗺️ Pelan</button>
+          <hr>
+          <button onclick="location.href='https://mohdpocai.github.io/Estate-Laporan/'">⚠️ Kerosakan ↗ <span class="tab-count" id="defectCount">0</span></button>
+          <button onclick="location.href='https://mohdpocai.github.io/Estate-Laporan/ringkasan.html'">📊 Ringkasan ↗</button>
         </div>
       </div>
       <input type="text" id="headerSearch" placeholder="Cari pekerja, bangunan atau kerosakan..." oninput="onSearchInput()">
@@ -250,9 +254,12 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       <div class="menu-wrap">
         <button class="icon-btn" onclick="toggleMenu(event)" title="Menu">⋯</button>
         <div class="menu" id="mainMenu">
-          <button onclick="location.href='https://mohdpocai.github.io/Estate-Laporan/'">⚠️ Senarai Kerosakan <span class="tab-count" id="defectCount">0</span></button>
-          <button onclick="location.href='https://mohdpocai.github.io/Estate-Laporan/ringkasan.html'">📊 Ringkasan Kelengkapan</button>
-          <hr>
+          <div id="mapMenuItems" style="display:none">
+            <button onclick="resetView()">🎯 Reset paparan pelan</button>
+            <button onclick="resetZoom()">🔍 Set semula zoom (<span id="zoomVal">100%</span>)</button>
+            <button id="btnLock" onclick="toggleLockLayout()">🔓 Layout Bebas</button>
+            <hr>
+          </div>
           <button onclick="exportPDF('all')">📄 Eksport Semua (PDF)</button>
           <button class="btn-import-local" id="btnImportLocal" onclick="importLegacyLocal()">⬆️ Import Data Lama</button>
           <hr>
@@ -274,22 +281,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 
     <!-- ===== MAP VIEW ===== -->
     <div id="mapView">
-      <div class="toolbar">
-        <div class="toolbar-group">
-          <button class="btn-tool btn-pekerja" onclick="openAddModal()">＋ Tambah</button>
-        </div>
-        <div class="toolbar-divider"></div>
-        <div class="toolbar-group">
-          <button class="btn-tool btn-zoom" onclick="zoomOut()">🔍 -</button>
-          <span class="zoom-display" id="zoomVal" onclick="resetZoom()" title="Klik untuk set semula ke 100%" style="cursor:pointer;">100%</span>
-          <button class="btn-tool btn-zoom" onclick="zoomIn()">🔍 +</button>
-          <button class="btn-tool btn-reset-view" onclick="resetView()">🎯 Reset View</button>
-        </div>
-        <div class="toolbar-divider"></div>
-        <div class="toolbar-group">
-          <button class="btn-tool btn-lock" id="btnLock" onclick="toggleLockLayout()">🔓 Layout Bebas</button>
-        </div>
-      </div>
+      <button class="fab-add" onclick="openAddModal()" title="Tambah Bangunan">+</button>
       <div id="canvas-container">
         <div id="canvas-viewport"></div>
       </div>
@@ -436,6 +428,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       document.getElementById('tabList').classList.toggle('active', view === 'list');
       document.getElementById('navDdLabel').textContent = view === 'list' ? '📋 Senarai' : '🗺️ Pelan';
       document.getElementById('navDdMenu').classList.remove('open');
+      document.getElementById('mapMenuItems').style.display = view === 'map' ? 'block' : 'none';
       document.getElementById('tabMap').classList.toggle('active', view === 'map');
       renderAll();
     }
