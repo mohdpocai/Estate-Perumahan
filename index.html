@@ -13,335 +13,162 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <style>
-    * { box-sizing: border-box; }
-    html, body {
-      width: 100%; height: 100%; margin: 0; padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #0F172A; color: #F8FAFC;
-      overflow: hidden;
-    }
-    #app-container { display: flex; flex-direction: column; width: 100vw; height: 100dvh; }
-
-    /* ===== Header ===== */
-    #app-header {
-      flex-shrink: 0; background: #0F172A; border-bottom: 1px solid #334155;
-      padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 50;
-    }
-    #app-header h1 {
-      font-size: 14px; margin: 0; color: #10B981; white-space: nowrap; flex-shrink: 0;
-    }
-    .view-tabs { display: flex; gap: 4px; background: #1E293B; border-radius: 8px; padding: 3px; flex-shrink: 0; }
-    .view-tab {
-      border: none; background: transparent; color: #94A3B8; padding: 7px 12px;
-      border-radius: 6px; font-weight: bold; font-size: 12px; cursor: pointer;
-    }
-    .view-tab.active { background: #10B981; color: #0F172A; }
-    #headerSearch {
-      flex: 1; min-width: 140px; padding: 8px 10px; background: #1E293B;
-      border: 1px solid #334155; border-radius: 6px; color: white; font-size: 12px;
-    }
-    .btn-header-action {
-      border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold;
-      font-size: 12px; cursor: pointer; flex-shrink: 0; white-space: nowrap;
-    }
-    .btn-export-header { background: #EC4899; color: white; }
-    .btn-header-action:hover { opacity: 0.9; }
-
-    /* ===== List View ===== */
-    #listView { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-    .filter-bar {
-      flex-shrink: 0; display: flex; gap: 6px; padding: 10px 14px; overflow-x: auto;
-      border-bottom: 1px solid #1E293B;
-    }
-    .filter-chip {
-      border: 1px solid #334155; background: #1E293B; color: #CBD5E1;
-      padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: bold;
-      cursor: pointer; white-space: nowrap; flex-shrink: 0;
-    }
-    .filter-chip.active { background: #10B981; border-color: #10B981; color: #0F172A; }
-
-    #listScroll { flex: 1; overflow-y: auto; padding: 12px 14px 90px 14px; }
-    .empty-state { text-align: center; color: #64748B; margin-top: 60px; font-size: 13px; line-height: 1.6; }
-
-    .building-card {
-      display: flex; align-items: center; gap: 12px;
-      background: #1E293B; border: 1px solid #334155; border-left: 4px solid #10B981;
-      border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer;
-      transition: border-color 0.15s;
-    }
-    .building-card:hover { border-color: #10B981; }
-    .building-card .card-icon { font-size: 22px; flex-shrink: 0; }
-    .building-card .card-main { flex: 1; min-width: 0; }
-    .building-card .card-title { font-size: 13px; font-weight: bold; color: #F8FAFC; }
-    .building-card .card-sub { font-size: 11px; color: #94A3B8; margin-top: 2px; }
-    .building-card .card-chevron { color: #475569; font-size: 16px; flex-shrink: 0; }
-    .occupancy-pill {
-      display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 8px;
-      border-radius: 999px; margin-top: 4px; background: #0F172A; color: #34D399;
-      border: 1px solid #334155;
-    }
-    .defect-pill {
-      display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 8px;
-      border-radius: 999px; margin-top: 4px; margin-left: 6px; background: #450A0A;
-      color: #FCA5A5; border: 1px solid #EF4444;
-    }
-    .building-card.has-defect { border-left-color: #EF4444; border-color: #7F1D1D; }
-
-    .fab-add {
-      position: absolute; bottom: 24px; right: 24px; width: 52px; height: 52px;
-      border-radius: 50%; background: #10B981; color: #0F172A; border: none;
-      font-size: 26px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.5);
-      z-index: 60;
-    }
-
-    /* ===== Map View ===== */
-    #mapView { flex: 1; position: relative; display: none; overflow: hidden; }
-    .toolbar {
-      position: absolute; top: 15px; left: 15px; z-index: 100;
-      background: #0F172A; border: 1px solid #334155; padding: 10px 12px;
-      border-radius: 10px; display: flex; flex-wrap: wrap; gap: 6px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      align-items: center; max-width: calc(100vw - 30px);
-    }
-    .toolbar-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .toolbar-divider { width: 1px; align-self: stretch; min-height: 24px; background: #334155; margin: 0 6px; flex-shrink: 0; }
-    .btn-tool {
-      border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold;
-      cursor: pointer; font-size: 12px; flex-shrink: 0; white-space: nowrap;
-    }
-    .btn-pekerja { background: #10B981; color: #0F172A; }
-    .btn-office { background: #38BDF8; color: #0F172A; }
-    .btn-kedai { background: #F59E0B; color: #0F172A; }
-    .btn-dewan { background: #A855F7; color: white; }
-    .btn-store { background: #D97706; color: white; }
-    .btn-surau { background: #059669; color: white; }
-    .btn-tool-road { background: #64748B; color: white; }
-    .btn-zoom { background: #3B82F6; color: white; }
-    .btn-reset-view { background: #475569; color: white; }
-    .btn-lock { background: #EAB308; color: #0F172A; }
-    .btn-lock.locked { background: #EF4444; color: white; }
-    .btn-tool:hover { opacity: 0.9; }
-
-    .zoom-display {
-      font-size: 12px; font-weight: bold; color: #38BDF8;
-      padding: 0 4px; min-width: 40px; text-align: center; flex-shrink: 0;
-    }
-
-    #canvas-container {
-      width: 100%; height: 100%; position: relative;
-      background-color: #1E293B; overflow: hidden;
-      cursor: grab; touch-action: none;
-    }
-    #canvas-container:active { cursor: grabbing; }
-
-    #canvas-viewport {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%; transform-origin: 0 0;
-      background-image:
-        linear-gradient(to right, rgba(51, 65, 85, 0.4) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(51, 65, 85, 0.4) 1px, transparent 1px);
-      background-size: 20px 20px;
-    }
-
-    .element-box {
-      position: absolute; border-radius: 4px; cursor: move;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: bold; font-size: 12px; user-select: none;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3); border: 2px solid transparent;
-      text-align: center; flex-direction: column; padding: 4px;
-      transform-origin: center center;
-      transition: left 0.15s ease-out, top 0.15s ease-out, width 0.15s ease-out, height 0.15s ease-out, transform 0.15s ease-out;
-      touch-action: none;
-    }
-    .element-box.is-locked { cursor: pointer !important; }
-    .element-box.dragging, .element-box.resizing, .element-box.rotating { transition: none !important; }
-
-    .type-pekerja { background: #10B981; color: #0F172A; border-color: #34D399; }
-    .type-office { background: #38BDF8; color: #0F172A; border-color: #7DD3FC; }
-    .type-kedai { background: #F59E0B; color: #0F172A; border-color: #FCD34D; }
-    .type-dewan { background: #A855F7; color: #FFFFFF; border-color: #C084FC; }
-    .type-store { background: #D97706; color: #FFFFFF; border-color: #FBBF24; }
-    .type-surau { background: #059669; color: #FFFFFF; border-color: #34D399; }
-    .type-road { background: #475569; color: #CBD5E1; border-color: #94A3B8; flex-direction: row; }
-
-    .element-box.active { border-color: #FFFFFF !important; box-shadow: 0 0 14px #FFFFFF; }
-    .element-box.has-defect { border-color: #EF4444; box-shadow: 0 0 12px rgba(239,68,68,0.8); }
-    .element-box.has-defect.active { box-shadow: 0 0 14px #FFFFFF, 0 0 20px rgba(239,68,68,0.9); }
-    
-    .defect-badge {
-      position: absolute; top: -9px; right: -9px; background: #EF4444; color: white;
-      width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.5); border: 2px solid #0F172A;
-      animation: defectPulse 1.4s ease-in-out infinite; z-index: 5;
-    }
-    @keyframes defectPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
-
-    .resize-handle {
-      position: absolute; right: -5px; bottom: -5px;
-      width: 12px; height: 12px; background-color: #FFFFFF;
-      border: 2px solid #0F172A; border-radius: 2px;
-      cursor: nwse-resize; display: none; touch-action: none;
-    }
-    .rotate-handle {
-      position: absolute; top: -25px; left: 50%; transform: translateX(-50%);
-      width: 16px; height: 16px; background-color: #38BDF8;
-      border: 2px solid #FFFFFF; border-radius: 50%;
-      cursor: grab; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4); touch-action: none;
-    }
-    .rotate-handle::after {
-      content: ''; position: absolute; top: 14px; left: 5px;
-      width: 2px; height: 8px; background-color: #38BDF8;
-    }
-    .element-box.active:not(.is-locked) .resize-handle,
-    .element-box.active:not(.is-locked) .rotate-handle { display: block; }
-
-    /* ===== Modal Shell ===== */
-    .modal-backdrop {
-      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(15, 23, 42, 0.75); z-index: 300;
-      align-items: flex-end; justify-content: center;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal-panel {
-      background: #0F172A; border: 1px solid #334155; border-radius: 14px 14px 0 0;
-      width: 100%; max-width: 520px; max-height: 88vh; display: flex; flex-direction: column;
-      box-shadow: 0 -8px 30px rgba(0,0,0,0.5);
-    }
-    @media (min-width: 640px) {
-      .modal-backdrop { align-items: center; }
-      .modal-panel { border-radius: 14px; max-height: 85vh; }
-    }
-    .modal-header {
-      padding: 16px; background: #1E293B; border-bottom: 1px solid #334155;
-      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
-      border-radius: 14px 14px 0 0;
-    }
-    .modal-header h2 { margin: 0; font-size: 15px; color: #10B981; }
-    .btn-close-modal {
-      background: transparent; border: none; color: #94A3B8;
-      font-size: 20px; font-weight: bold; cursor: pointer; line-height: 1;
-    }
-    .btn-close-modal:hover { color: #EF4444; }
-    .modal-body { flex: 1; overflow-y: auto; padding: 16px; }
-
-    .add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .add-grid button { padding: 16px 10px; font-size: 13px; }
-
-    /* Form Styles */
-    .form-group { margin-bottom: 10px; }
-    .form-group label { display: block; font-size: 11px; color: #CBD5E1; margin-bottom: 4px; }
-    .form-group input, .form-group select {
-      width: 100%; padding: 8px; background: #1E293B; border: 1px solid #334155;
-      border-radius: 6px; color: white; font-size: 12px;
-    }
-    .door-card {
-      background: #1E293B; border: 1px solid #334155; border-radius: 6px;
-      padding: 10px; margin-bottom: 10px; border-left: 3px solid #10B981;
-    }
-    .door-card-title { font-size: 12px; font-weight: bold; color: #10B981; margin-bottom: 6px; }
-    .checklist-title { font-size: 11px; font-weight: bold; color: #CBD5E1; margin: 8px 0 4px 0; }
-    .checklist-title-defect { font-size: 11px; font-weight: bold; color: #F59E0B; margin: 12px 0 4px 0; }
-    .item-row-alert { border-color: #EF4444; border-left: 3px solid #EF4444; }
-    .rename-field { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
-    .rename-field input {
-      flex: 1; padding: 8px; background: #1E293B; border: 1px solid #334155;
-      border-radius: 6px; color: white; font-size: 13px; font-weight: bold;
-    }
-    .door-name-input {
-      width: 100%; padding: 6px 8px; background: #0F172A; border: 1px solid #334155;
-      border-radius: 4px; color: #10B981; font-size: 12px; font-weight: bold; margin-bottom: 8px;
-    }
-    .door-actions-row { display: flex; gap: 8px; margin-top: 12px; }
-    .btn-door-add { flex: 1; padding: 8px; background: #10B981; color: #0F172A; border: none; border-radius: 6px; font-weight: bold; font-size: 12px; cursor: pointer; }
-    .btn-door-remove { flex: 1; padding: 8px; background: #334155; color: #F87171; border: 1px solid #EF4444; border-radius: 6px; font-weight: bold; font-size: 12px; cursor: pointer; }
-    .item-row { background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 8px; margin-bottom: 6px; }
-    .item-header {
-      display: flex; align-items: center; justify-content: space-between; gap: 6px;
-      font-size: 11px; color: #E2E8F0; font-weight: bold;
-    }
-    .item-header input[type="checkbox"] { width: 14px; height: 14px; accent-color: #10B981; cursor: pointer; }
-    .item-details {
-      margin-top: 6px; padding-top: 6px; border-top: 1px dashed #334155;
-      display: flex; flex-direction: column; gap: 6px;
-    }
-    .item-details input[type="date"] {
-      padding: 4px 6px; background: #1E293B; border: 1px solid #334155;
-      color: white; border-radius: 4px; font-size: 11px;
-    }
-    .image-action-buttons { display: flex; gap: 6px; margin-top: 4px; }
-    .btn-camera-action {
-      flex: 1; padding: 6px 4px; border: 1px solid #38BDF8; background: #0284C7;
-      color: white; border-radius: 6px; font-size: 10px; font-weight: bold;
-      cursor: pointer; text-align: center; user-select: none;
-    }
-    .btn-gallery-action {
-      flex: 1; padding: 6px 4px; border: 1px solid #34D399; background: #059669;
-      color: white; border-radius: 6px; font-size: 10px; font-weight: bold;
-      cursor: pointer; text-align: center; user-select: none;
-    }
-    .btn-camera-action:hover, .btn-gallery-action:hover { opacity: 0.9; }
-    .img-preview-container { position: relative; display: inline-block; margin-top: 6px; }
-    .img-preview { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #38BDF8; }
-    .btn-remove-img {
-      position: absolute; top: -6px; right: -6px; background: #EF4444; color: white;
-      border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px;
-      cursor: pointer; font-weight: bold; line-height: 18px; text-align: center; padding: 0;
-    }
-    .btn-action { width: 100%; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
-    .btn-pdf { background: #0284C7; color: white; }
-    .btn-delete { background: #EF4444; color: white; }
-
-    /* Kamera Modal */
-    #camera-modal {
-      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(15, 23, 42, 0.95); z-index: 1000;
-      flex-direction: column; align-items: center; justify-content: center; padding: 20px;
-    }
-    #camera-video {
-      width: 100%; max-width: 500px; height: auto; max-height: 60vh;
-      background: #000; border-radius: 8px; border: 2px solid #38BDF8; object-fit: cover;
-    }
-    .camera-controls { display: flex; gap: 12px; margin-top: 15px; width: 100%; max-width: 500px; }
-    .btn-capture { flex: 1; padding: 12px; background: #10B981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-    .btn-cancel-cam { flex: 1; padding: 12px; background: #EF4444; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-
-    /* Login & Status */
-    #login-overlay {
-      display: flex; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: #0F172A; z-index: 2000; align-items: center; justify-content: center; padding: 20px;
-    }
-    .login-box {
-      background: #1E293B; border: 1px solid #334155; border-radius: 12px;
-      padding: 24px; width: 100%; max-width: 340px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
-    }
-    .login-box h2 { margin: 0 0 4px 0; color: #10B981; font-size: 18px; }
-    .login-box p { margin: 0 0 16px 0; color: #94A3B8; font-size: 12px; line-height: 1.5; }
-    .login-box input {
-      width: 100%; padding: 10px; margin-bottom: 10px; background: #0F172A;
-      border: 1px solid #334155; border-radius: 6px; color: white; font-size: 13px;
-    }
-    .login-box button {
-      width: 100%; padding: 11px; background: #10B981; color: #0F172A; border: none;
-      border-radius: 6px; font-weight: bold; font-size: 13px; cursor: pointer;
-    }
-    #loginError { color: #F87171; font-size: 12px; margin-top: 10px; min-height: 16px; }
-    #layoutSelect {
-      padding: 7px 8px; background: #1E293B; color: #F8FAFC; border: 1px solid #334155;
-      border-radius: 6px; font-size: 12px; font-weight: bold; max-width: 160px; flex-shrink: 0;
-    }
-    .layout-controls { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
-    .btn-mini { padding: 7px 9px !important; }
-    #syncStatus { font-size: 11px; font-weight: bold; color: #94A3B8; white-space: nowrap; flex-shrink: 0; }
-    .btn-header-secondary { background: #334155; color: #E2E8F0; }
-    .btn-import-local { background: #F59E0B; color: #0F172A; display: none; }
-
-    #loading-overlay {
-      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(15, 23, 42, 0.85); z-index: 999;
-      justify-content: center; align-items: center; flex-direction: column; color: #38BDF8; font-weight: bold;
-    }
-  </style>
+:root{--bg:#F3F5F9;--sf:#fff;--line:#E3E8EF;--ink:#0F172A;--mut:#64748B;--nav:#0B2545;--brand:#1D6FB8;--ok:#15803D;--warn:#B45309;--bad:#DC2626;--r:10px}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;font-family:Inter,'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);overflow:hidden;font-size:14px}
+button,input,select{font-family:inherit}
+#app-container{display:flex;flex-direction:column;width:100vw;height:100dvh}
+/* header */
+#app-header{flex-shrink:0;background:var(--nav);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;z-index:50}
+.brand{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo{background:var(--brand);font-weight:700;font-size:12px;padding:5px 8px;border-radius:6px;letter-spacing:.5px}
+.brand-text{font-weight:600;font-size:14px}
+#layoutSelect{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:7px 8px;font-size:12px;max-width:150px}
+#layoutSelect option{color:#000}
+.view-tabs{display:flex;gap:2px;background:rgba(255,255,255,.08);border-radius:9px;padding:3px;flex-shrink:0}
+.view-tab{border:0;background:transparent;color:#B8C4D6;padding:7px 14px;border-radius:7px;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.view-tab.active{background:#fff;color:var(--nav)}
+.tab-count{background:var(--bad);color:#fff;border-radius:99px;font-size:10px;padding:1px 6px;display:none}
+#headerSearch{flex:1;min-width:120px;padding:8px 12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px}
+#headerSearch::placeholder{color:#94A3B8}
+#syncStatus{font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.menu-wrap{position:relative;flex-shrink:0}
+.icon-btn{background:rgba(255,255,255,.1);border:0;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer}
+.menu{display:none;position:absolute;right:0;top:42px;background:#fff;color:var(--ink);border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.25);min-width:210px;padding:6px;z-index:500}
+.menu.open{display:block}
+.menu button{display:block;width:100%;text-align:left;background:none;border:0;padding:10px 12px;border-radius:7px;font-size:13px;cursor:pointer;color:var(--ink)}
+.menu button:hover{background:var(--bg)}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.btn-import-local{display:none}
+/* list */
+#listView,#defectView,#summaryView{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+#defectView,#summaryView{display:none}
+.filter-bar{flex-shrink:0;display:flex;gap:8px;padding:12px 16px;overflow-x:auto;background:var(--sf);border-bottom:1px solid var(--line)}
+.filter-chip{border:1px solid var(--line);background:var(--sf);color:var(--mut);padding:6px 14px;border-radius:99px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.filter-chip.active{background:var(--nav);border-color:var(--nav);color:#fff}
+#listScroll,#defectScroll,#summaryScroll{flex:1;overflow-y:auto;padding:16px 16px 96px;max-width:900px;width:100%;margin:0 auto}
+.empty-state{text-align:center;color:var(--mut);margin-top:60px;line-height:1.7}
+.building-card{display:flex;align-items:center;gap:14px;background:var(--sf);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.building-card:hover{box-shadow:0 4px 14px rgba(15,23,42,.08);border-color:#C7D2E0}
+.card-icon{font-size:20px;width:40px;height:40px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card-main{flex:1;min-width:0}
+.card-title{font-size:14px;font-weight:600}
+.card-sub{font-size:12px;color:var(--mut);margin-top:2px}
+.card-chevron{color:#B0BAC9;font-size:20px}
+.occupancy-pill,.defect-pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;margin-top:6px}
+.occupancy-pill{background:#ECFDF5;color:var(--ok)}
+.defect-pill{background:#FEF2F2;color:var(--bad);margin-left:6px}
+.building-card.has-defect{border-left:3px solid var(--bad)}
+.fab-add{position:absolute;bottom:24px;right:24px;width:54px;height:54px;border-radius:50%;background:var(--brand);color:#fff;border:0;font-size:26px;cursor:pointer;box-shadow:0 6px 18px rgba(29,111,184,.45);z-index:60}
+/* defect tracker */
+.sum-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.sum-card{background:var(--sf);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer}
+.sum-card.on{border-color:var(--brand);box-shadow:0 0 0 2px rgba(29,111,184,.15)}
+.sum-card b{display:block;font-size:24px}
+.sum-card span{font-size:12px;color:var(--mut)}
+.def-card{background:var(--sf);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;border-left:4px solid var(--bad)}
+.def-card.st-prog{border-left-color:#D97706}.def-card.st-done{border-left-color:var(--ok);opacity:.8}
+.def-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.def-title{font-weight:600}.def-loc{font-size:12px;color:var(--mut);margin-top:2px}
+.badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.badge.st-new{background:#FEF2F2;color:var(--bad)}.badge.st-prog{background:#FFFBEB;color:var(--warn)}.badge.st-done{background:#F0FDF4;color:var(--ok)}
+.def-meta{font-size:12px;color:var(--mut);margin:8px 0}
+.def-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.def-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn{border:1px solid var(--line);background:var(--sf);color:var(--ink);padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.def-thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid var(--line)}
+/* map */
+#mapView{flex:1;position:relative;display:none;overflow:hidden}
+.toolbar{position:absolute;top:12px;left:12px;right:12px;z-index:100;background:var(--sf);border:1px solid var(--line);padding:8px 10px;border-radius:12px;display:flex;gap:6px;align-items:center;box-shadow:0 4px 16px rgba(15,23,42,.1);overflow-x:auto}
+.toolbar-group{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.toolbar-divider{width:1px;align-self:stretch;min-height:24px;background:var(--line);margin:0 4px;flex-shrink:0}
+.btn-tool{border:1px solid transparent;padding:7px 11px;border-radius:8px;font-weight:600;cursor:pointer;font-size:12px;flex-shrink:0;white-space:nowrap}
+.btn-pekerja{background:#D1FAE5;color:#065F46}.btn-office{background:#DBEAFE;color:#1E40AF}.btn-kedai{background:#FEF3C7;color:#92400E}.btn-dewan{background:#EDE9FE;color:#5B21B6}.btn-store{background:#FFEDD5;color:#9A3412}.btn-surau{background:#CCFBF1;color:#115E59}.btn-tool-road{background:#E2E8F0;color:#334155}
+.btn-zoom,.btn-reset-view{background:var(--bg);color:var(--ink);border-color:var(--line)}
+.btn-lock{background:#FEF3C7;color:#92400E}.btn-lock.locked{background:var(--bad);color:#fff}
+.zoom-display{font-size:12px;font-weight:700;color:var(--brand);min-width:40px;text-align:center}
+#canvas-container{width:100%;height:100%;position:relative;background:#EEF2F7;overflow:hidden;cursor:grab;touch-action:none}
+#canvas-viewport{position:absolute;top:0;left:0;width:100%;height:100%;transform-origin:0 0;background-image:linear-gradient(to right,rgba(148,163,184,.3) 1px,transparent 1px),linear-gradient(to bottom,rgba(148,163,184,.3) 1px,transparent 1px);background-size:20px 20px}
+.element-box{position:absolute;border-radius:6px;cursor:move;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;user-select:none;box-shadow:0 2px 8px rgba(15,23,42,.12);border:2px solid transparent;text-align:center;flex-direction:column;padding:4px;transform-origin:center;transition:left .15s,top .15s,width .15s,height .15s,transform .15s;touch-action:none}
+.element-box.is-locked{cursor:pointer!important}
+.element-box.dragging,.element-box.resizing,.element-box.rotating{transition:none!important}
+.type-pekerja{background:#D1FAE5;color:#065F46;border-color:#10B981}.type-office{background:#DBEAFE;color:#1E40AF;border-color:#3B82F6}.type-kedai{background:#FEF3C7;color:#92400E;border-color:#F59E0B}.type-dewan{background:#EDE9FE;color:#5B21B6;border-color:#8B5CF6}.type-store{background:#FFEDD5;color:#9A3412;border-color:#F97316}.type-surau{background:#CCFBF1;color:#115E59;border-color:#14B8A6}.type-road{background:#CBD5E1;color:#475569;border-color:#94A3B8;flex-direction:row}
+.element-box.active{border-color:var(--nav)!important;box-shadow:0 0 0 3px rgba(11,37,69,.25)}
+.element-box.has-defect{border-color:var(--bad);box-shadow:0 0 0 3px rgba(220,38,38,.25)}
+.defect-badge{position:absolute;top:-9px;right:-9px;background:var(--bad);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid #fff;z-index:5}
+.resize-handle{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:#fff;border:2px solid var(--nav);border-radius:3px;cursor:nwse-resize;display:none;touch-action:none}
+.rotate-handle{position:absolute;top:-26px;left:50%;transform:translateX(-50%);width:16px;height:16px;background:var(--brand);border:2px solid #fff;border-radius:50%;cursor:grab;display:none;touch-action:none}
+.rotate-handle::after{content:'';position:absolute;top:14px;left:5px;width:2px;height:8px;background:var(--brand)}
+.element-box.active:not(.is-locked) .resize-handle,.element-box.active:not(.is-locked) .rotate-handle{display:block}
+/* modal */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(11,37,69,.5);z-index:300;align-items:flex-end;justify-content:center}
+.modal-backdrop.open{display:flex}
+.modal-panel{background:var(--sf);border-radius:16px 16px 0 0;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 -10px 40px rgba(15,23,42,.3)}
+@media(min-width:640px){.modal-backdrop{align-items:center}.modal-panel{border-radius:16px}}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h2{margin:0;font-size:16px}
+.btn-close-modal{background:var(--bg);border:0;color:var(--mut);width:30px;height:30px;border-radius:8px;font-size:14px;cursor:pointer}
+.modal-body{flex:1;overflow-y:auto;padding:20px;background:var(--bg);border-radius:0 0 16px 16px}
+.add-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.add-grid button{padding:16px 10px;font-size:13px}
+.form-group{margin-bottom:10px}
+.form-group label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px;font-weight:500}
+input[type=text],input[type=number],input[type=date],input[type=email],input[type=password],select{width:100%;padding:9px 10px;background:#fff;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:13px}
+input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var(--brand)}
+.door-card{background:var(--sf);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.door-card-title{font-size:13px;font-weight:700;color:var(--nav);margin-bottom:8px}
+.checklist-title,.checklist-title-defect{font-size:12px;font-weight:700;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut)}
+.checklist-title-defect{color:var(--bad)}
+.rename-field{margin-bottom:6px}.rename-field input{font-weight:600;font-size:15px}
+.door-name-input{margin-bottom:8px}
+.door-actions-row{display:flex;gap:8px;margin-top:12px}
+.btn-door-add,.btn-door-remove{flex:1;padding:10px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;border:1px solid var(--line);background:var(--sf)}
+.btn-door-add{color:var(--brand)}.btn-door-remove{color:var(--bad)}
+.item-row{background:#F8FAFC;border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:6px}
+.item-row-alert{background:#FEF8F8;border-color:#FBCACA}
+.item-header{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:13px;font-weight:500}
+.item-header input[type=checkbox]{width:16px;height:16px;accent-color:var(--brand);cursor:pointer}
+.item-details{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:8px}
+.image-action-buttons{display:flex;gap:6px}
+.btn-camera-action,.btn-gallery-action{flex:1;padding:8px 4px;border:1px solid var(--line);background:#fff;color:var(--brand);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-align:center}
+.img-preview-container{position:relative;display:inline-block;margin-top:6px}
+.img-preview{width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.btn-remove-img{position:absolute;top:-6px;right:-6px;background:var(--bad);color:#fff;border:0;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;padding:0}
+.btn-action{width:100%;padding:11px;border:0;border-radius:8px;font-weight:600;cursor:pointer;margin-top:10px;font-size:13px}
+.btn-pdf{background:var(--nav);color:#fff}.btn-delete{background:#FEF2F2;color:var(--bad);border:1px solid #FBCACA}
+#camera-modal{display:none;position:fixed;inset:0;background:rgba(11,37,69,.95);z-index:1000;flex-direction:column;align-items:center;justify-content:center;padding:20px;color:#fff}
+#camera-video{width:100%;max-width:500px;max-height:60vh;background:#000;border-radius:12px;object-fit:cover}
+.camera-controls{display:flex;gap:12px;margin-top:16px;width:100%;max-width:500px}
+.btn-capture,.btn-cancel-cam{flex:1;padding:12px;border:0;border-radius:8px;font-weight:600;cursor:pointer;color:#fff}
+.btn-capture{background:var(--brand)}.btn-cancel-cam{background:#475569}
+#login-overlay{display:flex;position:fixed;inset:0;background:linear-gradient(160deg,var(--nav),#16467A);z-index:2000;align-items:center;justify-content:center;padding:20px}
+.login-box{background:#fff;border-radius:16px;padding:28px;width:100%;max-width:360px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.login-box h2{margin:0 0 4px;color:var(--nav);font-size:20px}
+.login-box p{margin:0 0 18px;color:var(--mut);font-size:13px}
+.login-box input{margin-bottom:10px}
+.login-box button{width:100%;padding:12px;background:var(--brand);color:#fff;border:0;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer}
+#loginError{color:var(--bad);font-size:12px;margin-top:10px;min-height:16px}
+#loading-overlay{display:none;position:fixed;inset:0;background:rgba(11,37,69,.8);z-index:999;justify-content:center;align-items:center;flex-direction:column;color:#fff;font-weight:600}
+.evidence{margin-top:8px}.evidence>label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px;font-weight:500}
+.repl-pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;margin-top:6px;margin-left:6px;background:#FFFBEB;color:var(--warn)}
+.element-box.has-repl{border-color:#D97706;box-shadow:0 0 0 3px rgba(217,119,6,.25)}
+.element-box.has-defect.has-repl{border-color:var(--bad)}
+.repl-badge{position:absolute;top:-10px;left:-10px;background:#D97706;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;z-index:5}
+.building-card.has-repl{border-left:3px solid #D97706}
+.warn-banner{background:#FFFBEB;border:1px solid #FCD34D;color:#92400E;border-radius:10px;padding:12px 14px;margin:12px 0;font-size:13px;line-height:1.6}
+.sum-row.four{grid-template-columns:repeat(4,1fr)}
+.sum-card.plain{cursor:default}
+.bar{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--line);margin-top:8px}.bar i{display:block;height:100%}
+.sum-item{background:var(--sf);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px}
+.sum-item>summary{padding:14px 16px;cursor:pointer;list-style:none}
+.sum-item>summary::-webkit-details-marker{display:none}
+.sum-head{display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:600}
+.sum-counts{font-size:12px;color:var(--mut);margin-top:6px}
+.loc-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 16px;border-top:1px solid var(--line);font-size:13px;cursor:pointer}
+.loc-row:hover{background:var(--bg)}.loc-row small{color:var(--mut)}
+@media(max-width:760px){.sum-row.four{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.brand-text{display:none}#app-header{flex-wrap:wrap;padding:10px 12px}#headerSearch{order:9;flex-basis:100%}.view-tab{padding:7px 10px}.def-fields,.sum-row{grid-template-columns:1fr 1fr}}
+</style>
 </head>
 <body>
 
@@ -373,24 +200,31 @@
   </div>
 
   <div id="app-container">
-    <div id="app-header">
-      <h1>🏘️ Pengurusan</h1>
-      <div class="layout-controls">
-        <select id="layoutSelect" onchange="changeLayout(this.value)" title="Pilih layout"></select>
-        <button class="btn-header-action btn-header-secondary btn-mini" onclick="addLayout()" title="Layout baharu">＋ Layout</button>
-        <button class="btn-header-action btn-header-secondary btn-mini" onclick="renameLayout()" title="Tukar nama layout">✏️</button>
-        <button class="btn-header-action btn-header-secondary btn-mini" onclick="deleteLayout()" title="Padam layout">🗑️</button>
+    <header id="app-header">
+      <div class="brand"><span class="logo">LP2</span><span class="brand-text">Pengurusan Rumah Pekerja</span></div>
+      <select id="layoutSelect" onchange="changeLayout(this.value)" title="Pilih layout"></select>
+      <nav class="view-tabs">
+        <button class="view-tab active" id="tabList" onclick="switchView('list')">Senarai</button>
+        <button class="view-tab" id="tabMap" onclick="switchView('map')">Pelan</button>
+        <button class="view-tab" id="tabSummary" onclick="switchView('summary')">Ringkasan</button>
+        <button class="view-tab" id="tabDefect" onclick="switchView('defect')">Kerosakan <span class="tab-count" id="defectCount">0</span></button>
+      </nav>
+      <input type="text" id="headerSearch" placeholder="Cari pekerja, bangunan atau kerosakan..." oninput="onSearchInput()">
+      <span id="syncStatus">...</span>
+      <div class="menu-wrap">
+        <button class="icon-btn" onclick="toggleMenu(event)" title="Menu">⋯</button>
+        <div class="menu" id="mainMenu">
+          <button onclick="exportPDF('all')">📄 Eksport Semua (PDF)</button>
+          <button class="btn-import-local" id="btnImportLocal" onclick="importLegacyLocal()">⬆️ Import Data Lama</button>
+          <hr>
+          <button onclick="addLayout()">＋ Layout baharu</button>
+          <button onclick="renameLayout()">✏️ Tukar nama layout</button>
+          <button onclick="deleteLayout()">🗑️ Padam layout</button>
+          <hr>
+          <button onclick="doLogout()">Log Keluar</button>
+        </div>
       </div>
-      <div class="view-tabs">
-        <button class="view-tab active" id="tabList" onclick="switchView('list')">📋 Senarai</button>
-        <button class="view-tab" id="tabMap" onclick="switchView('map')">🗺️ Pelan</button>
-      </div>
-      <input type="text" id="headerSearch" placeholder="Cari nama pekerja / bangunan..." oninput="onSearchInput()">
-      <span id="syncStatus">☁️ ...</span>
-      <button class="btn-header-action btn-import-local" id="btnImportLocal" onclick="importLegacyLocal()">⬆️ Import Data Lama</button>
-      <button class="btn-header-action btn-export-header" onclick="exportPDF('all')">📄 Eksport Semua</button>
-      <button class="btn-header-action btn-header-secondary" onclick="doLogout()">Log Keluar</button>
-    </div>
+    </header>
 
     <!-- ===== LIST VIEW ===== -->
     <div id="listView">
@@ -428,6 +262,10 @@
         <div id="canvas-viewport"></div>
       </div>
     </div>
+
+    <!-- ===== DEFECT TRACKER ===== -->
+    <div id="defectView"><div id="defectScroll"></div></div>
+    <div id="summaryView"><div id="summaryScroll"></div></div>
   </div>
 
   <!-- ===== ADD MODAL ===== -->
@@ -541,6 +379,7 @@
     const FILTER_CHIPS = [
       { key: 'semua', label: 'Semua' },
       { key: 'defect', label: '⚠️ Ada Kerosakan' },
+      { key: 'ganti', label: '🔧 Perlu Ganti' },
       { key: 'pekerja', label: '🏠 Pekerja' },
       { key: 'office', label: '🏢 Office' },
       { key: 'kedai', label: '🏪 Kedai' },
@@ -560,13 +399,22 @@
       localStorage.setItem('myViewMode_v1', view);
       document.getElementById('listView').style.display = view === 'list' ? 'flex' : 'none';
       document.getElementById('mapView').style.display = view === 'map' ? 'block' : 'none';
+      document.getElementById('defectView').style.display = view === 'defect' ? 'flex' : 'none';
+      document.getElementById('tabDefect').classList.toggle('active', view === 'defect');
+      document.getElementById('summaryView').style.display = view === 'summary' ? 'flex' : 'none';
+      document.getElementById('tabSummary').classList.toggle('active', view === 'summary');
       document.getElementById('tabList').classList.toggle('active', view === 'list');
       document.getElementById('tabMap').classList.toggle('active', view === 'map');
       renderAll();
     }
 
     function renderAll() {
-      if (currentView === 'list') {
+      updateDefectBadge();
+      if (currentView === 'defect') {
+        renderDefects();
+      } else if (currentView === 'summary') {
+        renderSummary();
+      } else if (currentView === 'list') {
         renderFilterBar();
         renderList();
       } else {
@@ -577,7 +425,9 @@
 
     function onSearchInput() {
       searchQuery = document.getElementById('headerSearch').value.toLowerCase().trim();
-      if (currentView === 'list') {
+      if (currentView === 'defect') renderDefects();
+      else if (currentView === 'summary') renderSummary();
+      else if (currentView === 'list') {
         renderList();
       } else {
         applyMapSearchHighlight();
@@ -665,7 +515,7 @@
     function collectPhotoIds(doors) {
       const ids = [];
       (doors || []).forEach(d => ['checklist', 'defects'].forEach(k => {
-        Object.values(d[k] || {}).forEach(e => { if (e && e.gambar) ids.push(e.gambar); });
+        Object.values(d[k] || {}).forEach(e => { if (e && e.gambar) ids.push(e.gambar); if (e && e.gambarTindakan) ids.push(e.gambarTindakan); });
       }));
       return ids;
     }
@@ -684,7 +534,7 @@
     function setSyncStatus(ok) {
       const el = document.getElementById('syncStatus');
       el.textContent = ok ? '☁️ Tersambung' : '⚠️ Luar talian';
-      el.style.color = ok ? '#34D399' : '#F59E0B';
+      el.textContent = ok ? '● Tersambung' : '● Luar talian'; el.style.color = ok ? '#4ADE80' : '#FBBF24';
     }
     function doLogin() {
       const email = document.getElementById('loginEmail').value.trim();
@@ -964,7 +814,7 @@
     function deleteElement(id) {
       if (confirm('Adakah anda pasti mahu memadamkan elemen ini?')) {
         const doomed = elements.find(e => e.id === id);
-        if (doomed) collectPhotoIds(doomed.doors).forEach(deletePhoto);
+        if (doomed) collectPhotoIds([...(doomed.doors || []), doomed]).forEach(deletePhoto);
         elements = elements.filter(e => e.id !== id);
         selectedId = null;
         saveToStorage();
@@ -999,16 +849,20 @@
 
     function countDefects(item) {
       let n = 0;
+      if (item.defects) Object.values(item.defects).forEach(e => { if (isOpenDefect(e)) n++; });
       if (item.doors) {
         item.doors.forEach(d => {
-          if (d.defects) Object.values(d.defects).forEach(e => { if (e && e.status) n++; });
+          if (d.defects) Object.values(d.defects).forEach(e => { if (isOpenDefect(e)) n++; });
         });
       }
       return n;
     }
 
     function refreshBackgroundView() {
-      if (currentView === 'list') renderList();
+      updateDefectBadge();
+      if (currentView === 'defect') renderDefects();
+      else if (currentView === 'summary') renderSummary();
+      else if (currentView === 'list') renderList();
       else { renderCanvas(); applyMapSearchHighlight(); }
     }
 
@@ -1020,7 +874,9 @@
 
     function renderList() {
       const filtered = elements.filter(item => {
-        if (activeFilter === 'defect') {
+        if (activeFilter === 'ganti') {
+          if (countReplace(item) === 0) return false;
+        } else if (activeFilter === 'defect') {
           if (countDefects(item) === 0) return false;
         } else if (activeFilter !== 'semua' && item.category !== activeFilter) {
           return false;
@@ -1037,13 +893,14 @@
         const config = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG.pekerja;
         const summary = occupancySummary(item);
         const defects = countDefects(item);
+        const repl = countReplace(item);
         return `
-          <div class="building-card ${defects > 0 ? 'has-defect' : ''}" onclick="openDetailModal('${item.id}')">
+          <div class="building-card ${defects > 0 ? 'has-defect' : (repl > 0 ? 'has-repl' : '')}" onclick="openDetailModal('${item.id}')">
             <div class="card-icon">${config.icon}</div>
             <div class="card-main">
               <div class="card-title">${escapeHTML(item.name || config.label)}</div>
               <div class="card-sub">${escapeHTML(config.label)}${item.category === 'pekerja' ? ` • ${item.doors.length} Pintu` : ''}</div>
-              ${summary ? `<span class="occupancy-pill">${summary}</span>` : ''}${defects > 0 ? `<span class="defect-pill">⚠️ ${defects} kerosakan</span>` : ''}
+              ${summary ? `<span class="occupancy-pill">${summary}</span>` : ''}${defects > 0 ? `<span class="defect-pill">⚠️ ${defects} kerosakan</span>` : ''}${repl > 0 ? `<span class="repl-pill">🔧 ${repl} perlu ganti</span>` : ''}
             </div>
             <div class="card-chevron">›</div>
           </div>
@@ -1208,13 +1065,15 @@
         if (item.type === 'building') {
           const config = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG.pekerja;
           const defectCount = countDefects(item);
-          div.className = `element-box ${config.colorClass} ${item.id === selectedId ? 'active' : ''} ${defectCount > 0 ? 'has-defect' : ''} ${lockClass}`;
+          div.className = `element-box ${config.colorClass} ${item.id === selectedId ? 'active' : ''} ${defectCount > 0 ? 'has-defect' : ''} ${countReplace(item) > 0 ? 'has-repl' : ''} ${lockClass}`;
           const doorLabel = item.category === 'pekerja' ? `<div style="font-size:10px; font-weight:normal;">(${(item.doors && item.doors.length) || item.doorCount || 6} Pintu)</div>` : '';
           const defectBadge = defectCount > 0 ? `<div class="defect-badge">!</div>` : '';
-          div.innerHTML = `<div>${config.icon} ${escapeHTML(item.name || config.label)}</div>${doorLabel}${defectBadge}`;
+          const replBadge = countReplace(item) > 0 ? `<div class="repl-badge" title="Ada barang perlu ganti / rosak">🔧</div>` : '';
+          div.innerHTML = `<div>${config.icon} ${escapeHTML(item.name || config.label)}</div>${doorLabel}${defectBadge}${replBadge}`;
         } else {
-          div.className = `element-box type-road ${item.id === selectedId ? 'active' : ''} ${lockClass}`;
-          div.innerHTML = `GK Jalan Utama`;
+          const rd = countDefects(item);
+          div.className = `element-box type-road ${item.id === selectedId ? 'active' : ''} ${rd > 0 ? 'has-defect' : ''} ${lockClass}`;
+          div.innerHTML = `GK Jalan Utama${rd > 0 ? '<div class="defect-badge">!</div>' : ''}`;
         }
 
         div.style.left = item.x + 'px';
@@ -1429,11 +1288,11 @@
     function renderChecklistItemRow(itemId, doorIndex, listKey, chk, itemData) {
       const isChecked = itemData.status ? 'checked' : '';
       const isDefect = listKey === 'defects';
-      const rowClass = isDefect && itemData.status ? 'item-row item-row-alert' : 'item-row';
+      const rowClass = (isDefect || itemData.keadaan) && itemData.status ? 'item-row item-row-alert' : 'item-row';
       return `
         <div class="${rowClass}">
           <div class="item-header">
-            <span>${isDefect ? '⚠️ ' : ''}${chk.label}</span>
+            <span>${chk.label}${!isDefect && itemData.status && itemData.keadaan ? ` <span class="badge ${itemData.keadaan === 'rosak' ? 'st-new' : 'st-prog'}">${COND[itemData.keadaan]}</span>` : ''}${isDefect && itemData.status ? ` <span class="badge ${DEF_STATUS[defStatus(itemData)].c}">${DEF_STATUS[defStatus(itemData)].l}</span>` : ''}</span>
             <input type="checkbox" ${isChecked} onchange="updateItemStatus('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.checked)">
           </div>
           ${itemData.status ? `
@@ -1447,7 +1306,26 @@
                   <label style="font-size:10px;">Catatan:</label>
                   <input type="text" value="${escapeHTML(itemData.catatan || '')}" maxlength="150" placeholder="Perincian kerosakan..." onchange="updateItemRemarks('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.value)">
                 </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:12px;">Status Tindakan:</label>
+                  <select onchange="setDefectAction('${itemId}', ${doorIndex}, '${chk.key}', this.value)">
+                    ${Object.keys(DEF_STATUS).map(k => `<option value="${k}" ${defStatus(itemData) === k ? 'selected' : ''}>${DEF_STATUS[k].l}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:12px;">Pihak Bertindak / Kontraktor:</label>
+                  <input type="text" value="${escapeHTML(itemData.pihak || '')}" maxlength="60" placeholder="Cth: Unit Penyelenggaraan" onchange="setDefectField('${itemId}', ${doorIndex}, '${chk.key}', 'pihak', this.value)">
+                </div>
+                ${evidenceBlock(itemId, doorIndex, chk.key, itemData)}
               ` : ''}
+              ${!isDefect ? `<div class="form-group" style="margin:0;">
+                <label style="font-size:12px;">Keadaan Barang:</label>
+                <select onchange="updateItemCondition('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.value)">
+                  <option value="" ${!itemData.keadaan ? 'selected' : ''}>Baik</option>
+                  <option value="ganti" ${itemData.keadaan === 'ganti' ? 'selected' : ''}>Perlu Diganti</option>
+                  <option value="rosak" ${itemData.keadaan === 'rosak' ? 'selected' : ''}>Rosak</option>
+                </select>
+              </div>` : ''}
               <div class="form-group" style="margin:0;">
                 <label style="font-size:10px;">Gambar Bukti${isDefect ? ' Kerosakan' : ' Kelengkapan'}:</label>
                 <div class="image-action-buttons">
@@ -1495,6 +1373,11 @@
         <button class="btn-action btn-pdf" onclick="exportPDF('${item.id}')">📄 Eksport PDF ${item.type === 'road' ? 'Jalan Ini' : 'Bangunan Ini'}</button>
       `;
 
+      const flagged = replaceList(item);
+      if (flagged.length) {
+        formHTML += `<div class="warn-banner"><b>⚠️ ${flagged.length} barang perlu diganti / rosak</b><br>${flagged.map(f => `${escapeHTML(f.door)}: ${f.label} (${f.k === 'rosak' ? 'Rosak' : 'Perlu Diganti'})`).join('<br>')}</div>`;
+      }
+
       if (item.type === 'building' && item.category === 'pekerja') {
         formHTML += `<hr style="border-color:#334155; margin:12px 0;"><h4 style="margin:0 0 10px 0; color:#10B981;">Maklumat ${item.doors.length} Pintu</h4>`;
 
@@ -1509,7 +1392,7 @@
 
           formHTML += `
             <div class="door-card">
-              <div class="door-card-title">${escapeHTML(doorTitle)}</div>
+              <div class="door-card-title">${escapeHTML(doorTitle)}${countDoorReplace(door) ? ` <span class="badge st-prog">⚠️ ${countDoorReplace(door)} perlu ganti / rosak</span>` : ''}</div>
               <input type="text" class="door-name-input" value="${escapeHTML(door.label || '')}" maxlength="40" placeholder="Nama pintu/bilik (cth: Bilik A) — pilihan" onchange="updateDoorData('${item.id}', ${index}, 'label', this.value)">
               <div class="form-group">
                 <label>Nama Penghuni:</label>
@@ -1531,6 +1414,10 @@
             <button class="btn-door-remove" onclick="removeLastDoor('${item.id}')">➖ Buang Pintu Terakhir</button>
           </div>
         `;
+      }
+
+      if (item.category !== 'pekerja') {
+        formHTML += `<div class="door-card" style="margin-top:12px;"><div class="door-card-title">Laporan Kerosakan & Tindakan</div>${renderChecklistSection(item.id, -1, item, 'defects', 'checklist-title-defect', 'Senarai Semak Kerosakan:', checklistFor(item))}</div>`;
       }
 
       formHTML += `<button class="btn-action btn-delete" onclick="deleteElement('${item.id}')">🗑️ Padam Elemen</button>`;
@@ -1591,7 +1478,7 @@
 
     function getChecklistEntry(id, doorIndex, listKey, key, createIfMissing) {
       const item = elements.find(e => e.id === id);
-      const door = item && item.doors && item.doors[doorIndex];
+      const door = doorIndex === -1 ? item : (item && item.doors && item.doors[doorIndex]);
       if (!door) return null;
       if (!door[listKey]) door[listKey] = {};
       if (!door[listKey][key] && createIfMissing) {
@@ -1604,9 +1491,37 @@
       const entry = getChecklistEntry(id, doorIndex, listKey, key, true);
       if (!entry) return;
       entry.status = checked;
+      if (checked) entry.tarikh = todayStr();
+      if (listKey === 'defects' && checked && (!entry.tindakan || entry.tindakan === 'selesai')) entry.tindakan = 'baru';
       saveToStorage();
       openDetailModal(id);
       refreshBackgroundView();
+    }
+    const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
+    function updateItemCondition(id, di, listKey, key, val) {
+      const e = getChecklistEntry(id, di, listKey, key, false);
+      if (!e) return;
+      e.keadaan = val;
+      if (val) e.tarikh = todayStr();
+      saveToStorage();
+      openDetailModal(id);
+      refreshBackgroundView();
+    }
+    function replaceList(item) {
+      const out = [];
+      (item.doors || []).forEach((d, i) => ITEMS_CHECKLIST.forEach(c => {
+        const e = d.checklist && d.checklist[c.key];
+        if (e && e.status && e.keadaan) out.push({ door: d.label && d.label.trim() ? d.label : 'Pintu ' + (i + 1), label: c.label, k: e.keadaan });
+      }));
+      return out;
+    }
+    function countDoorReplace(d) {
+      return Object.values(d.checklist || {}).filter(e => e && e.status && e.keadaan).length;
+    }
+    function countReplace(item) {
+      let n = 0;
+      (item.doors || []).forEach(d => Object.values(d.checklist || {}).forEach(e => { if (e && e.status && e.keadaan) n++; }));
+      return n;
     }
     function updateItemDate(id, doorIndex, listKey, key, dateVal) {
       const entry = getChecklistEntry(id, doorIndex, listKey, key, false);
@@ -1620,7 +1535,8 @@
       entry.catatan = val.trim();
       saveToStorage();
     }
-    function uploadItemImage(e, id, doorIndex, listKey, key) {
+    function uploadItemImage(e, id, doorIndex, listKey, key, field) {
+      field = field || 'gambar';
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
@@ -1629,28 +1545,27 @@
           const photoId = await storeNewPhoto(evt.target.result);
           const entry = getChecklistEntry(id, doorIndex, listKey, key, false);
           if (!entry) return;
-          deletePhoto(entry.gambar);
-          entry.gambar = photoId;
-          saveToStorage();
-          openDetailModal(id);
+          deletePhoto(entry[field]);
+          entry[field] = photoId;
+          afterDefectChange(id);
         } catch (err) {
           alert('Gagal muat naik gambar: ' + err.message);
         }
       };
       reader.readAsDataURL(file);
     }
-    function removeItemImage(id, doorIndex, listKey, key) {
+    function removeItemImage(id, doorIndex, listKey, key, field) {
+      field = field || 'gambar';
       const entry = getChecklistEntry(id, doorIndex, listKey, key, false);
       if (!entry) return;
-      deletePhoto(entry.gambar);
-      entry.gambar = '';
-      saveToStorage();
-      openDetailModal(id);
+      deletePhoto(entry[field]);
+      entry[field] = '';
+      afterDefectChange(id);
     }
 
     /* ===================== CAMERA ===================== */
-    function openCameraModal(id, doorIndex, listKey, key) {
-      activeCamTarget = { houseId: id, doorIndex: doorIndex, listKey: listKey, key: key };
+    function openCameraModal(id, doorIndex, listKey, key, field) {
+      activeCamTarget = { houseId: id, doorIndex: doorIndex, listKey: listKey, key: key, field: field || 'gambar' };
       const modal = document.getElementById('camera-modal');
       const video = document.getElementById('camera-video');
       navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
@@ -1676,15 +1591,14 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUri = canvas.toDataURL('image/jpeg', 0.8);
-      const { houseId, doorIndex, listKey, key } = activeCamTarget;
+      const { houseId, doorIndex, listKey, key, field } = activeCamTarget;
       closeCameraModal();
       storeNewPhoto(dataUri).then(photoId => {
         const entry = getChecklistEntry(houseId, doorIndex, listKey, key, false);
         if (!entry) return;
-        deletePhoto(entry.gambar);
-        entry.gambar = photoId;
-        saveToStorage();
-        openDetailModal(houseId);
+        deletePhoto(entry[field]);
+        entry[field] = photoId;
+        afterDefectChange(houseId);
       }).catch(err => alert('Gagal simpan gambar: ' + err.message));
     }
     document.addEventListener('visibilitychange', () => {
@@ -1710,7 +1624,7 @@
         if (activeElem) activeElem.classList.remove('active');
 
         const canvasMap = await html2canvas(canvasContainer, {
-          scale: 2, useCORS: true, backgroundColor: '#1E293B'
+          scale: 2, useCORS: true, backgroundColor: '#EEF2F7'
         });
 
         if (activeElem && selectedId) activeElem.classList.add('active');
@@ -1769,7 +1683,7 @@
                   if (chkData && chkData.status) {
                     hasItems = true;
                     if (startY > 270) { pdf.addPage(); startY = 20; }
-                    pdf.text(`• ${chk.label} - Tarikh: ${chkData.tarikh || 'N/A'}`, 18, startY);
+                    pdf.text(`• ${chk.label} - Tarikh: ${chkData.tarikh || 'N/A'}${chkData.keadaan ? ' [' + COND[chkData.keadaan].toUpperCase() + ']' : ''}`, 18, startY);
                     startY += 5;
                   }
                 });
@@ -1783,7 +1697,7 @@
                     if (startY > 270) { pdf.addPage(); startY = 20; }
                     pdf.setTextColor(220, 38, 38);
                     const note = chkData.catatan ? ` (${chkData.catatan})` : '';
-                    pdf.text(`⚠ ${chk.label} - Dilaporkan: ${chkData.tarikh || 'N/A'}${note}`, 18, startY);
+                    pdf.text(`! ${chk.label} - Dilaporkan: ${chkData.tarikh || 'N/A'} [${DEF_STATUS[defStatus(chkData)].l}]${note}`, 18, startY);
                     pdf.setTextColor(50);
                     startY += 5;
                   }
@@ -1793,7 +1707,17 @@
               });
             } else {
               pdf.setFontSize(10);
-              pdf.text(`Tiada perincian pintu untuk elemen ini.`, 14, startY);
+              let any = false;
+              checklistFor(item).forEach(chk => {
+                const d = item.defects ? item.defects[chk.key] : null;
+                if (d && d.status) {
+                  any = true;
+                  pdf.setTextColor(220, 38, 38);
+                  pdf.text(`! ${chk.label} - Dilaporkan: ${d.tarikh || 'N/A'} [${DEF_STATUS[defStatus(d)].l}]${d.catatan ? ' (' + d.catatan + ')' : ''}`, 14, startY);
+                  startY += 6;
+                }
+              });
+              if (!any) { pdf.setTextColor(50); pdf.text(`Tiada kerosakan dilaporkan.`, 14, startY); }
             }
           }
         }
@@ -1805,6 +1729,192 @@
         loadingOverlay.style.display = 'none';
       }
     }
+
+
+    /* ===================== DEFECT ACTION WORKFLOW ===================== */
+    const DEF_STATUS = {
+      baru:    { l: 'Baharu', c: 'st-new' },
+      proses:  { l: 'Dalam Tindakan', c: 'st-prog' },
+      selesai: { l: 'Selesai', c: 'st-done' }
+    };
+    let defFilter = 'aktif';
+    const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+
+    function evidenceBlock(id, di, key, e) {
+      const a = `'${id}', ${di}, 'defects', '${key}', 'gambarTindakan'`;
+      return `<div class="evidence">
+        <label>📎 Gambar Bukti Tindakan / Pembaikan:</label>
+        <div class="image-action-buttons">
+          <button class="btn-camera-action" type="button" onclick="openCameraModal(${a})">📸 Kamera</button>
+          <label class="btn-gallery-action">🖼️ Galeri / Fail
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage(event, ${a})">
+          </label>
+        </div>
+        ${e.gambarTindakan ? `<div class="img-preview-container">
+          <img ${e.gambarTindakan.startsWith('data:') ? '' : `data-photo="${e.gambarTindakan}"`} src="${photoSrc(e.gambarTindakan)}" class="img-preview">
+          <button class="btn-remove-img" onclick="removeItemImage(${a})" title="Padam Gambar">✖</button>
+        </div>` : ''}
+      </div>`;
+    }
+    function defStatus(e) { return DEF_STATUS[e && e.tindakan] ? e.tindakan : 'baru'; }
+    function isOpenDefect(e) { return !!(e && e.status && defStatus(e) !== 'selesai'); }
+
+    const ROAD_DEFECT_CHECKLIST = [
+      { key: 'lubangJalan', label: 'Lubang / Jalan Berlubang' },
+      { key: 'lampuJalan', label: 'Lampu Jalan Rosak' },
+      { key: 'paritTersumbat', label: 'Parit Tersumbat' },
+      { key: 'jalanRetak', label: 'Permukaan Jalan Retak / Runtuh' },
+      { key: 'papanTanda', label: 'Papan Tanda Rosak' },
+      { key: 'bahuJalan', label: 'Bahu Jalan Terhakis' }
+    ];
+    function checklistFor(item) { return item.category === 'jalan' ? ROAD_DEFECT_CHECKLIST : DEFECT_CHECKLIST; }
+
+    function allDefects() {
+      const out = [];
+      elements.forEach(item => {
+        if (item.category === 'pekerja') return;
+        checklistFor(item).forEach(chk => {
+          const e = item.defects && item.defects[chk.key];
+          if (e && e.status) out.push({ item, door: null, di: -1, chk, e });
+        });
+      });
+      elements.forEach(item => (item.doors || []).forEach((door, di) => {
+        DEFECT_CHECKLIST.forEach(chk => {
+          const e = door.defects && door.defects[chk.key];
+          if (e && e.status) out.push({ item, door, di, chk, e });
+        });
+      }));
+      return out;
+    }
+    function updateDefectBadge() {
+      const n = allDefects().filter(d => isOpenDefect(d.e)).length;
+      const b = document.getElementById('defectCount');
+      b.textContent = n; b.style.display = n ? 'inline-block' : 'none';
+    }
+    function afterDefectChange(id) {
+      saveToStorage();
+      if (document.getElementById('detailModalBackdrop').classList.contains('open')) openDetailModal(id);
+      refreshBackgroundView();
+    }
+    function setDefectAction(id, di, key, status) {
+      const e = getChecklistEntry(id, di, 'defects', key, false);
+      if (!e) return;
+      if (status === 'selesai' && !e.gambarTindakan && !confirm('Tiada gambar bukti tindakan. Tandakan selesai tanpa gambar?')) { afterDefectChange(id); return; }
+      e.tindakan = status;
+      if (status === 'proses' && !e.tarikhTindakan) e.tarikhTindakan = todayStr();
+      if (status === 'selesai') e.tarikhSelesai = todayStr(); else delete e.tarikhSelesai;
+      afterDefectChange(id);
+    }
+    function setDefectField(id, di, key, field, val) {
+      const e = getChecklistEntry(id, di, 'defects', key, false);
+      if (!e) return;
+      e[field] = val.trim();
+      saveToStorage();
+    }
+    function setDefFilter(f) { defFilter = f; renderDefects(); }
+    function daysOpen(e) {
+      if (!e.tarikh) return '';
+      const end = e.tarikhSelesai ? new Date(e.tarikhSelesai) : new Date();
+      const d = Math.max(0, Math.floor((end - new Date(e.tarikh)) / 864e5));
+      return e.tarikhSelesai ? `Selesai dalam ${d} hari` : `${d} hari dibuka`;
+    }
+
+    function renderDefects() {
+      const all = allDefects();
+      const cnt = k => all.filter(d => defStatus(d.e) === k).length;
+      const q = searchQuery;
+      const list = all.filter(d => {
+        const st = defStatus(d.e);
+        if (defFilter === 'aktif' ? st === 'selesai' : (defFilter !== 'semua' && st !== defFilter)) return false;
+        if (!q) return true;
+        return [d.item.name, d.door && d.door.nama, d.door && d.door.label, d.chk.label, d.e.catatan, d.e.pihak].some(t => t && String(t).toLowerCase().includes(q));
+      }).sort((a, b) => (a.e.tarikh || '').localeCompare(b.e.tarikh || ''));
+
+      const sc = (k, label, n) => `<div class="sum-card ${defFilter === k ? 'on' : ''}" onclick="setDefFilter('${k}')"><b>${n}</b><span>${label}</span></div>`;
+      let html = `<div class="sum-row">${sc('baru', 'Baharu — perlu tindakan', cnt('baru'))}${sc('proses', 'Dalam tindakan', cnt('proses'))}${sc('selesai', 'Selesai', cnt('selesai'))}</div>
+        <div class="filter-bar" style="padding:0 0 12px;background:none;border:0;">
+          <button class="filter-chip ${defFilter === 'aktif' ? 'active' : ''}" onclick="setDefFilter('aktif')">Belum selesai</button>
+          <button class="filter-chip ${defFilter === 'semua' ? 'active' : ''}" onclick="setDefFilter('semua')">Semua rekod</button>
+        </div>`;
+      if (!list.length) html += `<div class="empty-state">Tiada kerosakan dalam paparan ini. 🎉</div>`;
+      html += list.map(d => {
+        const st = defStatus(d.e), S = DEF_STATUS[st];
+        const where = d.door ? `${escapeHTML(d.item.name || 'Bangunan')} • ${escapeHTML(d.door.label || 'Pintu ' + (d.di + 1))}${d.door.nama ? ' • ' + escapeHTML(d.door.nama) : ''}` : `${escapeHTML(d.item.name || (CATEGORY_CONFIG[d.item.category] || {}).label || 'Elemen')} • ${escapeHTML((CATEGORY_CONFIG[d.item.category] || {}).label || '')}`;
+        const k = `'${d.item.id}', ${d.di}, '${d.chk.key}'`;
+        const btns = st === 'baru' ? `<button class="btn pri" onclick="setDefectAction(${k}, 'proses')">▶ Mula Tindakan</button><button class="btn ok" onclick="setDefectAction(${k}, 'selesai')">✔ Selesai</button>`
+          : st === 'proses' ? `<button class="btn ok" onclick="setDefectAction(${k}, 'selesai')">✔ Tandakan Selesai</button>`
+          : `<button class="btn" onclick="setDefectAction(${k}, 'baru')">↺ Buka Semula</button>`;
+        return `<div class="def-card ${S.c}">
+          <div class="def-top">
+            <div style="display:flex;gap:12px;">
+              ${d.e.gambar ? `<img class="def-thumb" ${d.e.gambar.startsWith('data:') ? '' : `data-photo="${d.e.gambar}"`} src="${photoSrc(d.e.gambar)}">` : ''}
+              <div><div class="def-title">${d.chk.label}</div><div class="def-loc">${where}</div></div>
+            </div>
+            <span class="badge ${S.c}">${S.l}</span>
+          </div>
+          <div class="def-meta">Dilaporkan: ${d.e.tarikh || '-'} • ${daysOpen(d.e)}${d.e.catatan ? '<br>' + escapeHTML(d.e.catatan) : ''}</div>
+          <div class="def-fields">
+            <input type="text" value="${escapeHTML(d.e.pihak || '')}" placeholder="Pihak bertindak / kontraktor" maxlength="60" onchange="setDefectField(${k}, 'pihak', this.value)">
+            <input type="text" value="${escapeHTML(d.e.catatanTindakan || '')}" placeholder="Nota tindakan" maxlength="150" onchange="setDefectField(${k}, 'catatanTindakan', this.value)">
+          </div>
+          ${evidenceBlock(d.item.id, d.di, d.chk.key, d.e)}
+          <div class="def-actions">${btns}<button class="btn" onclick="openDetailModal('${d.item.id}')">Butiran bangunan</button></div>
+        </div>`;
+      }).join('');
+      document.getElementById('defectScroll').innerHTML = html;
+      loadMissingPhotos();
+    }
+
+
+    /* ===================== KELENGKAPAN SUMMARY ===================== */
+    function allEquip() {
+      const out = [];
+      elements.forEach(item => (item.doors || []).forEach((door, di) => ITEMS_CHECKLIST.forEach(chk => {
+        const e = door.checklist && door.checklist[chk.key];
+        if (e && e.status) out.push({ item, door, di, chk, e });
+      })));
+      return out;
+    }
+    function renderSummary() {
+      const q = searchQuery;
+      const all = allEquip().filter(r => !q || [r.item.name, r.door.nama, r.door.label, r.chk.label].some(t => t && String(t).toLowerCase().includes(q)));
+      const cond = r => r.e.keadaan || 'baik';
+      const n = (list, k) => list.filter(r => cond(r) === k).length;
+      const houses = elements.filter(e => e.category === 'pekerja');
+      const doors = houses.reduce((a, h) => a + (h.doors || []).length, 0);
+      const occ = houses.reduce((a, h) => a + (h.doors || []).filter(d => d.nama && d.nama.trim()).length, 0);
+      const card = (v, l, c) => `<div class="sum-card plain"><b style="${c ? 'color:' + c : ''}">${v}</b><span>${l}</span></div>`;
+      let html = `<div class="sum-row four">${card(all.length, 'Jumlah barang direkod')}${card(n(all, 'baik'), 'Baik', 'var(--ok)')}${card(n(all, 'ganti'), 'Perlu diganti', 'var(--warn)')}${card(n(all, 'rosak'), 'Rosak', 'var(--bad)')}</div>
+        <div class="def-meta" style="margin-top:-4px;">${occ} daripada ${doors} pintu berpenghuni • ${houses.length} rumah pekerja</div>`;
+      if (!all.length) html += `<div class="empty-state">Tiada rekod kelengkapan${q ? ' yang sepadan' : ''}.</div>`;
+      html += ITEMS_CHECKLIST.map(chk => {
+        const rows = all.filter(r => r.chk.key === chk.key);
+        if (!rows.length) return '';
+        const b = n(rows, 'baik'), g = n(rows, 'ganti'), r2 = n(rows, 'rosak'), t = rows.length;
+        const order = { rosak: 0, ganti: 1, baik: 2 };
+        rows.sort((x, y) => order[cond(x)] - order[cond(y)]);
+        const pct = v => (v / t * 100).toFixed(1) + '%';
+        return `<details class="sum-item" ${g + r2 > 0 ? 'open' : ''}>
+          <summary>
+            <div class="sum-head"><span>${chk.label}</span><span>${t} unit</span></div>
+            <div class="bar"><i style="width:${pct(b)};background:var(--ok)"></i><i style="width:${pct(g)};background:#D97706"></i><i style="width:${pct(r2)};background:var(--bad)"></i></div>
+            <div class="sum-counts">${b} baik • ${g} perlu diganti • ${r2} rosak</div>
+          </summary>
+          ${rows.map(r => {
+            const c = cond(r);
+            return `<div class="loc-row" onclick="openDetailModal('${r.item.id}')">
+              <div>${escapeHTML(r.item.name || 'Rumah')} • ${escapeHTML(r.door.label || 'Pintu ' + (r.di + 1))}<br><small>${r.door.nama ? escapeHTML(r.door.nama) + ' • ' : ''}Tarikh: ${r.e.tarikh || '-'}</small></div>
+              <span class="badge ${c === 'rosak' ? 'st-new' : c === 'ganti' ? 'st-prog' : 'st-done'}">${c === 'baik' ? 'Baik' : COND[c]}</span>
+            </div>`;
+          }).join('')}
+        </details>`;
+      }).join('');
+      document.getElementById('summaryScroll').innerHTML = html;
+    }
+
+    /* ===================== HEADER MENU ===================== */
+    function toggleMenu(ev) { ev.stopPropagation(); document.getElementById('mainMenu').classList.toggle('open'); }
+    document.addEventListener('click', () => document.getElementById('mainMenu').classList.remove('open'));
 
     /* ===================== INIT ===================== */
     updateLockUI();
