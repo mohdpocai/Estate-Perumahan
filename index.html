@@ -179,6 +179,13 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .nav-dd-menu .active{background:#EAF2FB;color:var(--brand);font-weight:700}
 .nav-dd-menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .nav-dd-menu .dd-sub{font-size:11px;color:var(--mut);padding:6px 12px 2px;text-transform:uppercase;letter-spacing:.4px}
+/* send defect report */
+.send-card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px;margin:12px 0}
+.send-title{font-size:12px;font-weight:700;color:var(--nav);margin-bottom:8px}
+.send-row{display:flex;gap:6px;flex-wrap:wrap}
+.btn-send{flex:1;min-width:84px;padding:9px 6px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-align:center}
+.btn-send.wa{background:#DCFCE7;border-color:#86EFAC;color:#166534}
+.btn-send.mail{background:#DBEAFE;border-color:#93C5FD;color:#1E40AF}
 /* detail window paging */
 .modal-nav{display:none;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-top:1px solid var(--line);background:var(--sf);border-radius:0 0 16px 16px;flex-shrink:0}
 .modal-nav .btn{min-width:108px;padding:11px 12px}
@@ -1335,6 +1342,83 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
     function openAddModal() { document.getElementById('addModalBackdrop').classList.add('open'); }
     function closeAddModal() { document.getElementById('addModalBackdrop').classList.remove('open'); }
 
+    /* ===================== SEND DEFECT REPORT (WhatsApp / Emel / Kongsi) ===================== */
+    function sendButtons(args) {
+      return `<button class="btn-send wa" type="button" onclick="sendReport('wa', ${args})">💬 WhatsApp</button>
+        <button class="btn-send mail" type="button" onclick="sendReport('mail', ${args})">✉️ Emel</button>
+        ${navigator.share ? `<button class="btn-send" type="button" onclick="sendReport('share', ${args})">📤 Kongsi</button>` : ''}`;
+    }
+
+    function daysSince(tarikh) {
+      if (!tarikh) return '';
+      const d = Math.max(0, Math.floor((new Date() - new Date(tarikh)) / 864e5));
+      return ` (${d} hari)`;
+    }
+
+    function defectBlock(d, bold) {
+      const b = t => bold ? `*${t}*` : t;
+      const place = d.door
+        ? `${d.item.name || 'Bangunan'} • ${d.door.label && d.door.label.trim() ? d.door.label : 'Pintu ' + (d.di + 1)}${d.door.nama && d.door.nama.trim() ? ' (' + d.door.nama.trim() + ')' : ''}`
+        : `${d.item.name || (CATEGORY_CONFIG[d.item.category] || {}).label || 'Elemen'}`;
+      const lines = [
+        `📍 ${b(place)}`,
+        `🔧 ${d.chk.label}`,
+        `📅 Dilaporkan: ${d.e.tarikh || '-'}${daysSince(d.e.tarikh)}`,
+        `📌 Status: ${DEF_STATUS[defStatus(d.e)].l}`
+      ];
+      if (d.e.catatan) lines.push(`📝 Catatan: ${d.e.catatan}`);
+      if (d.e.pihak) lines.push(`👷 Pihak bertindak: ${d.e.pihak}`);
+      return lines.join('\n');
+    }
+
+    function buildReport(list, bold) {
+      const head = `⚠️ ${bold ? '*LAPORAN KEROSAKAN*' : 'LAPORAN KEROSAKAN'} - ${currentLayoutName()}`;
+      const many = list.length > 1;
+      const body = list.map((d, i) => (many ? `${i + 1}. ` : '') + defectBlock(d, bold).split('\n').join(many ? '\n   ' : '\n')).join('\n\n');
+      const foot = list.length > 1 ? `\n\nJumlah: ${list.length} kerosakan belum selesai` : '';
+      return { title: head, text: `${head}\n\n${body}${foot}` };
+    }
+
+    function reportTargets(scope, id, di, key) {
+      if (scope === 'all') return allDefects().filter(d => d.item.id === id && isOpenDefect(d.e));
+      return allDefects().filter(d => d.item.id === id && d.di === di && d.chk.key === key);
+    }
+
+    async function photoFile(g) {
+      if (!g) return null;
+      let uri = photoSrc(g);
+      if (!uri && db && !g.startsWith('data:')) {
+        const snap = await db.ref('photos/' + g).once('value');
+        uri = snap.val();
+        if (uri) photoCache[g] = uri;
+      }
+      if (!uri) return null;
+      const blob = await (await fetch(uri)).blob();
+      return new File([blob], 'kerosakan.jpg', { type: blob.type || 'image/jpeg' });
+    }
+
+    async function sendReport(channel, scope, id, di, key) {
+      const list = reportTargets(scope, id, di, key);
+      if (!list.length) { alert('Tiada kerosakan untuk dihantar.'); return; }
+      if (channel === 'wa') {
+        const r = buildReport(list, true);
+        window.open('https://wa.me/?text=' + encodeURIComponent(r.text.slice(0, 3500)), '_blank');
+      } else if (channel === 'mail') {
+        const r = buildReport(list, false);
+        const body = r.text.length > 1800 ? r.text.slice(0, 1800) + '\n...(dipendekkan)' : r.text;
+        location.href = 'mailto:?subject=' + encodeURIComponent(r.title) + '&body=' + encodeURIComponent(body);
+      } else {
+        const r = buildReport(list, false);
+        const data = { title: r.title, text: r.text };
+        try {
+          const files = [];
+          for (const d of list) { const f = await photoFile(d.e.gambar); if (f) files.push(f); if (files.length >= 5) break; }
+          if (files.length && navigator.canShare && navigator.canShare({ files })) data.files = files;
+        } catch (err) { /* share without photos */ }
+        try { await navigator.share(data); } catch (err) { if (err && err.name !== 'AbortError') alert('Gagal kongsi: ' + err.message); }
+      }
+    }
+
     function renderChecklistItemRow(itemId, doorIndex, listKey, chk, itemData) {
       const isChecked = itemData.status ? 'checked' : '';
       const isDefect = listKey === 'defects';
@@ -1367,6 +1451,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
                   <input type="text" value="${escapeHTML(itemData.pihak || '')}" maxlength="60" placeholder="Cth: Unit Penyelenggaraan" onchange="setDefectField('${itemId}', ${doorIndex}, '${chk.key}', 'pihak', this.value)">
                 </div>
                 ${evidenceBlock(itemId, doorIndex, chk.key, itemData)}
+                <div class="send-row">${sendButtons(`'one', '${itemId}', ${doorIndex}, '${chk.key}'`)}</div>
               ` : ''}
               ${!isDefect ? `<div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Keadaan Barang:</label>
@@ -1515,6 +1600,11 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         `;
 
         if (isPekerja) formHTML += doorOverview(item);
+
+        const openDefs = allDefects().filter(d => d.item.id === item.id && isOpenDefect(d.e));
+        if (openDefs.length) {
+          formHTML += `<div class="send-card"><div class="send-title">📤 Hantar laporan kerosakan (${openDefs.length} belum selesai)</div><div class="send-row">${sendButtons(`'all', '${item.id}'`)}</div></div>`;
+        }
 
         const flagged = replaceList(item);
         if (flagged.length) {
