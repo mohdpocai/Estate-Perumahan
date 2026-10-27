@@ -1944,6 +1944,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       proses:  { l: 'Dalam Tindakan', c: 'st-prog' },
       selesai: { l: 'Selesai', c: 'st-done' }
     };
+    const AUTO_NOTE = { baru: 'Tiada Tindakan', proses: 'Sedang dibaiki', selesai: 'Selesai' };
     const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
     function evidenceBlock(id, di, key, e) {
@@ -2007,6 +2008,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       if (!e) return;
       if (status === 'selesai' && !e.gambarTindakan && !confirm('Tiada gambar bukti tindakan. Tandakan selesai tanpa gambar?')) { afterDefectChange(id); return; }
       e.tindakan = status;
+      e.catatanTindakan = AUTO_NOTE[status] || '';
       if (status === 'proses' && !e.tarikhTindakan) e.tarikhTindakan = todayStr();
       if (status === 'selesai') e.tarikhSelesai = todayStr(); else delete e.tarikhSelesai;
       afterDefectChange(id);
