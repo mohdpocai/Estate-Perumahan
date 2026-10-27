@@ -206,14 +206,15 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       <nav class="view-tabs">
         <button class="view-tab active" id="tabList" onclick="switchView('list')">Senarai</button>
         <button class="view-tab" id="tabMap" onclick="switchView('map')">Pelan</button>
-        <button class="view-tab" id="tabSummary" onclick="switchView('summary')">Ringkasan</button>
-        <button class="view-tab" id="tabDefect" onclick="switchView('defect')">Kerosakan <span class="tab-count" id="defectCount">0</span></button>
       </nav>
       <input type="text" id="headerSearch" placeholder="Cari pekerja, bangunan atau kerosakan..." oninput="onSearchInput()">
       <span id="syncStatus">...</span>
       <div class="menu-wrap">
         <button class="icon-btn" onclick="toggleMenu(event)" title="Menu">⋯</button>
         <div class="menu" id="mainMenu">
+          <button onclick="location.href='kerosakan.html'">⚠️ Senarai Kerosakan <span class="tab-count" id="defectCount">0</span></button>
+          <button onclick="location.href='ringkasan.html'">📊 Ringkasan Kelengkapan</button>
+          <hr>
           <button onclick="exportPDF('all')">📄 Eksport Semua (PDF)</button>
           <button class="btn-import-local" id="btnImportLocal" onclick="importLegacyLocal()">⬆️ Import Data Lama</button>
           <hr>
@@ -257,8 +258,6 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
     </div>
 
     <!-- ===== DEFECT TRACKER ===== -->
-    <div id="defectView"><div id="defectScroll"></div></div>
-    <div id="summaryView"><div id="summaryScroll"></div></div>
   </div>
 
   <!-- ===== ADD MODAL ===== -->
@@ -315,7 +314,10 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
     let currentLayoutId = localStorage.getItem('currentLayoutId_v1') || '';
     let listeningLayoutId = null;
     let selectedId = null;
-    let currentView = localStorage.getItem('myViewMode_v1') || 'list';
+    let pendingOpenId = new URLSearchParams(location.search).get('open');
+    const hashView = (location.hash || '').replace('#', '');
+    let currentView = pendingOpenId ? 'list' : (['list', 'map'].includes(hashView) ? hashView : localStorage.getItem('myViewMode_v1'));
+    if (currentView !== 'list' && currentView !== 'map') currentView = 'list';
     let activeFilter = 'semua';
     let searchQuery = '';
 
@@ -392,10 +394,6 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       localStorage.setItem('myViewMode_v1', view);
       document.getElementById('listView').style.display = view === 'list' ? 'flex' : 'none';
       document.getElementById('mapView').style.display = view === 'map' ? 'block' : 'none';
-      document.getElementById('defectView').style.display = view === 'defect' ? 'flex' : 'none';
-      document.getElementById('tabDefect').classList.toggle('active', view === 'defect');
-      document.getElementById('summaryView').style.display = view === 'summary' ? 'flex' : 'none';
-      document.getElementById('tabSummary').classList.toggle('active', view === 'summary');
       document.getElementById('tabList').classList.toggle('active', view === 'list');
       document.getElementById('tabMap').classList.toggle('active', view === 'map');
       renderAll();
@@ -403,11 +401,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 
     function renderAll() {
       updateDefectBadge();
-      if (currentView === 'defect') {
-        renderDefects();
-      } else if (currentView === 'summary') {
-        renderSummary();
-      } else if (currentView === 'list') {
+      if (currentView === 'list') {
         renderFilterBar();
         renderList();
       } else {
@@ -418,9 +412,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 
     function onSearchInput() {
       searchQuery = document.getElementById('headerSearch').value.toLowerCase().trim();
-      if (currentView === 'defect') renderDefects();
-      else if (currentView === 'summary') renderSummary();
-      else if (currentView === 'list') {
+      if (currentView === 'list') {
         renderList();
       } else {
         applyMapSearchHighlight();
@@ -585,6 +577,11 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         elements.forEach(e => { lastSaved[e.id] = JSON.stringify(e); });
         if (selectedId && !elements.some(e => e.id === selectedId)) selectedId = null;
         renderAll();
+        if (pendingOpenId) {
+          const pid = pendingOpenId; pendingOpenId = null;
+          if (elements.some(e => e.id === pid)) openDetailModal(pid);
+          history.replaceState(null, '', location.pathname);
+        }
         if (!firstSnapshotHandled) {
           firstSnapshotHandled = true;
           if (elements.length === 0 && Object.keys(layouts).length === 1 && getLegacyLocal().length > 0) {
@@ -853,9 +850,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 
     function refreshBackgroundView() {
       updateDefectBadge();
-      if (currentView === 'defect') renderDefects();
-      else if (currentView === 'summary') renderSummary();
-      else if (currentView === 'list') renderList();
+      if (currentView === 'list') renderList();
       else { renderCanvas(); applyMapSearchHighlight(); }
     }
 
@@ -1730,7 +1725,6 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       proses:  { l: 'Dalam Tindakan', c: 'st-prog' },
       selesai: { l: 'Selesai', c: 'st-done' }
     };
-    let defFilter = 'aktif';
     const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
     function evidenceBlock(id, di, key, e) {
@@ -1804,107 +1798,6 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       e[field] = val.trim();
       saveToStorage();
     }
-    function setDefFilter(f) { defFilter = f; renderDefects(); }
-    function daysOpen(e) {
-      if (!e.tarikh) return '';
-      const end = e.tarikhSelesai ? new Date(e.tarikhSelesai) : new Date();
-      const d = Math.max(0, Math.floor((end - new Date(e.tarikh)) / 864e5));
-      return e.tarikhSelesai ? `Selesai dalam ${d} hari` : `${d} hari dibuka`;
-    }
-
-    function renderDefects() {
-      const all = allDefects();
-      const cnt = k => all.filter(d => defStatus(d.e) === k).length;
-      const q = searchQuery;
-      const list = all.filter(d => {
-        const st = defStatus(d.e);
-        if (defFilter === 'aktif' ? st === 'selesai' : (defFilter !== 'semua' && st !== defFilter)) return false;
-        if (!q) return true;
-        return [d.item.name, d.door && d.door.nama, d.door && d.door.label, d.chk.label, d.e.catatan, d.e.pihak].some(t => t && String(t).toLowerCase().includes(q));
-      }).sort((a, b) => (a.e.tarikh || '').localeCompare(b.e.tarikh || ''));
-
-      const sc = (k, label, n) => `<div class="sum-card ${defFilter === k ? 'on' : ''}" onclick="setDefFilter('${k}')"><b>${n}</b><span>${label}</span></div>`;
-      let html = `<div class="sum-row">${sc('baru', 'Baharu — perlu tindakan', cnt('baru'))}${sc('proses', 'Dalam tindakan', cnt('proses'))}${sc('selesai', 'Selesai', cnt('selesai'))}</div>
-        <div class="filter-bar" style="padding:0 0 12px;background:none;border:0;">
-          <button class="filter-chip ${defFilter === 'aktif' ? 'active' : ''}" onclick="setDefFilter('aktif')">Belum selesai</button>
-          <button class="filter-chip ${defFilter === 'semua' ? 'active' : ''}" onclick="setDefFilter('semua')">Semua rekod</button>
-        </div>`;
-      if (!list.length) html += `<div class="empty-state">Tiada kerosakan dalam paparan ini. 🎉</div>`;
-      html += list.map(d => {
-        const st = defStatus(d.e), S = DEF_STATUS[st];
-        const where = d.door ? `${escapeHTML(d.item.name || 'Bangunan')} • ${escapeHTML(d.door.label || 'Pintu ' + (d.di + 1))}${d.door.nama ? ' • ' + escapeHTML(d.door.nama) : ''}` : `${escapeHTML(d.item.name || (CATEGORY_CONFIG[d.item.category] || {}).label || 'Elemen')} • ${escapeHTML((CATEGORY_CONFIG[d.item.category] || {}).label || '')}`;
-        const k = `'${d.item.id}', ${d.di}, '${d.chk.key}'`;
-        const btns = st === 'baru' ? `<button class="btn pri" onclick="setDefectAction(${k}, 'proses')">▶ Mula Tindakan</button><button class="btn ok" onclick="setDefectAction(${k}, 'selesai')">✔ Selesai</button>`
-          : st === 'proses' ? `<button class="btn ok" onclick="setDefectAction(${k}, 'selesai')">✔ Tandakan Selesai</button>`
-          : `<button class="btn" onclick="setDefectAction(${k}, 'baru')">↺ Buka Semula</button>`;
-        return `<div class="def-card ${S.c}">
-          <div class="def-top">
-            <div style="display:flex;gap:12px;">
-              ${d.e.gambar ? `<img class="def-thumb" ${d.e.gambar.startsWith('data:') ? '' : `data-photo="${d.e.gambar}"`} src="${photoSrc(d.e.gambar)}">` : ''}
-              <div><div class="def-title">${d.chk.label}</div><div class="def-loc">${where}</div></div>
-            </div>
-            <span class="badge ${S.c}">${S.l}</span>
-          </div>
-          <div class="def-meta">Dilaporkan: ${d.e.tarikh || '-'} • ${daysOpen(d.e)}${d.e.catatan ? '<br>' + escapeHTML(d.e.catatan) : ''}</div>
-          <div class="def-fields">
-            <input type="text" value="${escapeHTML(d.e.pihak || '')}" placeholder="Pihak bertindak / kontraktor" maxlength="60" onchange="setDefectField(${k}, 'pihak', this.value)">
-            <input type="text" value="${escapeHTML(d.e.catatanTindakan || '')}" placeholder="Nota tindakan" maxlength="150" onchange="setDefectField(${k}, 'catatanTindakan', this.value)">
-          </div>
-          ${evidenceBlock(d.item.id, d.di, d.chk.key, d.e)}
-          <div class="def-actions">${btns}<button class="btn" onclick="openDetailModal('${d.item.id}')">Butiran bangunan</button></div>
-        </div>`;
-      }).join('');
-      document.getElementById('defectScroll').innerHTML = html;
-      loadMissingPhotos();
-    }
-
-
-    /* ===================== KELENGKAPAN SUMMARY ===================== */
-    function allEquip() {
-      const out = [];
-      elements.forEach(item => (item.doors || []).forEach((door, di) => ITEMS_CHECKLIST.forEach(chk => {
-        const e = door.checklist && door.checklist[chk.key];
-        if (e && e.status) out.push({ item, door, di, chk, e });
-      })));
-      return out;
-    }
-    function renderSummary() {
-      const q = searchQuery;
-      const all = allEquip().filter(r => !q || [r.item.name, r.door.nama, r.door.label, r.chk.label].some(t => t && String(t).toLowerCase().includes(q)));
-      const cond = r => r.e.keadaan || 'baik';
-      const n = (list, k) => list.filter(r => cond(r) === k).length;
-      const houses = elements.filter(e => e.category === 'pekerja');
-      const doors = houses.reduce((a, h) => a + (h.doors || []).length, 0);
-      const occ = houses.reduce((a, h) => a + (h.doors || []).filter(d => d.nama && d.nama.trim()).length, 0);
-      const card = (v, l, c) => `<div class="sum-card plain"><b style="${c ? 'color:' + c : ''}">${v}</b><span>${l}</span></div>`;
-      let html = `<div class="sum-row four">${card(all.length, 'Jumlah barang direkod')}${card(n(all, 'baik'), 'Baik', 'var(--ok)')}${card(n(all, 'ganti'), 'Perlu diganti', 'var(--warn)')}${card(n(all, 'rosak'), 'Rosak', 'var(--bad)')}</div>
-        <div class="def-meta" style="margin-top:-4px;">${occ} daripada ${doors} pintu berpenghuni • ${houses.length} rumah pekerja</div>`;
-      if (!all.length) html += `<div class="empty-state">Tiada rekod kelengkapan${q ? ' yang sepadan' : ''}.</div>`;
-      html += ITEMS_CHECKLIST.map(chk => {
-        const rows = all.filter(r => r.chk.key === chk.key);
-        if (!rows.length) return '';
-        const b = n(rows, 'baik'), g = n(rows, 'ganti'), r2 = n(rows, 'rosak'), t = rows.length;
-        const order = { rosak: 0, ganti: 1, baik: 2 };
-        rows.sort((x, y) => order[cond(x)] - order[cond(y)]);
-        const pct = v => (v / t * 100).toFixed(1) + '%';
-        return `<details class="sum-item" ${g + r2 > 0 ? 'open' : ''}>
-          <summary>
-            <div class="sum-head"><span>${chk.label}</span><span>${t} unit</span></div>
-            <div class="bar"><i style="width:${pct(b)};background:var(--ok)"></i><i style="width:${pct(g)};background:#D97706"></i><i style="width:${pct(r2)};background:var(--bad)"></i></div>
-            <div class="sum-counts">${b} baik • ${g} perlu diganti • ${r2} rosak</div>
-          </summary>
-          ${rows.map(r => {
-            const c = cond(r);
-            return `<div class="loc-row" onclick="openDetailModal('${r.item.id}')">
-              <div>${escapeHTML(r.item.name || 'Rumah')} • ${escapeHTML(r.door.label || 'Pintu ' + (r.di + 1))}<br><small>${r.door.nama ? escapeHTML(r.door.nama) + ' • ' : ''}Tarikh: ${r.e.tarikh || '-'}</small></div>
-              <span class="badge ${c === 'rosak' ? 'st-new' : c === 'ganti' ? 'st-prog' : 'st-done'}">${c === 'baik' ? 'Baik' : COND[c]}</span>
-            </div>`;
-          }).join('')}
-        </details>`;
-      }).join('');
-      document.getElementById('summaryScroll').innerHTML = html;
-    }
-
     /* ===================== HEADER MENU ===================== */
     function toggleMenu(ev) { ev.stopPropagation(); document.getElementById('mainMenu').classList.toggle('open'); }
     document.addEventListener('click', () => document.getElementById('mainMenu').classList.remove('open'));
