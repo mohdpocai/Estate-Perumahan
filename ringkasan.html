@@ -55,39 +55,38 @@ const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
       })));
       return out;
     }
+    let sumFilter = 'semua';
+    function setSumFilter(f) { sumFilter = (sumFilter === f ? 'semua' : f); renderSummary(); }
     function renderSummary() {
       const q = searchQuery;
-      const all = allEquip().filter(r => !q || [r.item.name, r.door.nama, r.door.label, r.chk.label].some(t => t && String(t).toLowerCase().includes(q)));
       const cond = r => r.e.keadaan || 'baik';
-      const n = (list, k) => list.filter(r => cond(r) === k).length;
-      const houses = elements.filter(e => e.category === 'pekerja');
-      const doors = houses.reduce((a, h) => a + (h.doors || []).length, 0);
-      const occ = houses.reduce((a, h) => a + (h.doors || []).filter(d => d.nama && d.nama.trim()).length, 0);
-      const card = (v, l, c) => `<div class="sum-card plain"><b style="${c ? 'color:' + c : ''}">${v}</b><span>${l}</span></div>`;
-      let html = `<div class="sum-row four">${card(all.length, 'Jumlah barang direkod')}${card(n(all, 'baik'), 'Baik', 'var(--ok)')}${card(n(all, 'ganti'), 'Perlu diganti', 'var(--warn)')}${card(n(all, 'rosak'), 'Rosak', 'var(--bad)')}</div>
-        <div class="def-meta" style="margin-top:-4px;">${occ} daripada ${doors} pintu berpenghuni • ${houses.length} rumah pekerja</div>`;
-      if (!all.length) html += `<div class="empty-state">Tiada rekod kelengkapan${q ? ' yang sepadan' : ''}.</div>`;
+      const match = r => !q || [r.item.name, r.door.nama, r.door.label, r.chk.label].some(t => t && String(t).toLowerCase().includes(q));
+      const recorded = allEquip().filter(match);
+      const bad = recorded.filter(r => cond(r) !== 'baik');
+      const n = k => bad.filter(r => cond(r) === k).length;
+      const shown = bad.filter(r => sumFilter === 'semua' || cond(r) === sumFilter);
+      const card = (k, v, l, c) => `<div class="sum-card ${sumFilter === k ? 'on' : ''}" onclick="setSumFilter('${k}')"><b style="color:${c}">${v}</b><span>${l}</span></div>`;
+      let html = `<div class="sum-row">${card('semua', bad.length, 'Perlu tindakan', 'var(--ink)')}${card('rosak', n('rosak'), 'Rosak', 'var(--bad)')}${card('ganti', n('ganti'), 'Perlu diganti', 'var(--warn)')}</div>
+        <div class="def-meta" style="margin-top:-4px;">${recorded.length - bad.length} daripada ${recorded.length} barang direkod dalam keadaan baik</div>`;
+      if (!shown.length) html += `<div class="empty-state">${recorded.length ? 'Tiada barang rosak atau perlu diganti. 🎉' : 'Tiada rekod kelengkapan' + (q ? ' yang sepadan' : '') + '.'}</div>`;
+      const order = { rosak: 0, ganti: 1 };
       html += ITEMS_CHECKLIST.map(chk => {
-        const rows = all.filter(r => r.chk.key === chk.key);
+        const rows = shown.filter(r => r.chk.key === chk.key).sort((x, y) => order[cond(x)] - order[cond(y)]);
         if (!rows.length) return '';
-        const b = n(rows, 'baik'), g = n(rows, 'ganti'), r2 = n(rows, 'rosak'), t = rows.length;
-        const order = { rosak: 0, ganti: 1, baik: 2 };
-        rows.sort((x, y) => order[cond(x)] - order[cond(y)]);
-        const pct = v => (v / t * 100).toFixed(1) + '%';
-        return `<details class="sum-item" ${g + r2 > 0 ? 'open' : ''}>
-          <summary>
-            <div class="sum-head"><span>${chk.label}</span><span>${t} unit</span></div>
-            <div class="bar"><i style="width:${pct(b)};background:var(--ok)"></i><i style="width:${pct(g)};background:#D97706"></i><i style="width:${pct(r2)};background:var(--bad)"></i></div>
-            <div class="sum-counts">${b} baik • ${g} perlu diganti • ${r2} rosak</div>
-          </summary>
+        const g = rows.filter(r => cond(r) === 'ganti').length, r2 = rows.length - g;
+        return `<div class="sum-item">
+          <div style="padding:14px 16px;">
+            <div class="sum-head"><span>${chk.label}</span><span>${rows.length} unit</span></div>
+            <div class="sum-counts">${r2 ? r2 + ' rosak' : ''}${r2 && g ? ' • ' : ''}${g ? g + ' perlu diganti' : ''}</div>
+          </div>
           ${rows.map(r => {
             const c = cond(r);
             return `<div class="loc-row" onclick="location.href='index.html?open=${encodeURIComponent(r.item.id)}'">
               <div>${escapeHTML(r.item.name || 'Rumah')} • ${escapeHTML(r.door.label || 'Pintu ' + (r.di + 1))}<br><small>${r.door.nama ? escapeHTML(r.door.nama) + ' • ' : ''}Tarikh: ${r.e.tarikh || '-'}</small></div>
-              <span class="badge ${c === 'rosak' ? 'st-new' : c === 'ganti' ? 'st-prog' : 'st-done'}">${c === 'baik' ? 'Baik' : COND[c]}</span>
+              <span class="badge ${c === 'rosak' ? 'st-new' : 'st-prog'}">${COND[c]}</span>
             </div>`;
           }).join('')}
-        </details>`;
+        </div>`;
       }).join('');
       document.getElementById('summaryScroll').innerHTML = html;
     }
