@@ -1118,9 +1118,37 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 
         div.onclick = (e) => { e.stopPropagation(); selectElement(item.id); };
         div.ondblclick = (e) => { e.stopPropagation(); openDetailModal(item.id); };
+        attachDoubleTap(div, item, [resizeHandle, rotateHandle]);
 
         viewport.appendChild(div);
       });
+    }
+
+    /* Double-tap on a map element (phone) opens its detail window.
+       Tracked globally by id because the first tap re-renders the map and replaces the element. */
+    let lastTap = { id: null, t: 0 };
+    function attachDoubleTap(el, item, handles) {
+      let start = null;
+      el.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1 || handles.includes(e.target)) { start = null; return; }
+        start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+      }, { passive: true });
+      el.addEventListener('touchend', (e) => {
+        if (!start) return;
+        const t = e.changedTouches[0];
+        const moved = Math.hypot(t.clientX - start.x, t.clientY - start.y);
+        const now = Date.now();
+        const quick = now - start.t < 400;
+        start = null;
+        if (moved > 10 || !quick) { lastTap = { id: null, t: 0 }; return; }
+        if (lastTap.id === item.id && now - lastTap.t < 400) {
+          lastTap = { id: null, t: 0 };
+          e.preventDefault();               // no extra click / re-render after the double tap
+          openDetailModal(item.id);
+        } else {
+          lastTap = { id: item.id, t: now };
+        }
+      }, { passive: false });
     }
 
     function selectElement(id) {
