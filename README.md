@@ -12,6 +12,8 @@ Host it with GitHub Pages: Settings → Pages → `main` / root.
 | `ringkasan.html` | **Ringkasan**: only items that are rosak or need replacing. |
 | `shared.js` / `shared.css` | Code and styles used by `kerosakan.html` and `ringkasan.html` (Firebase, login, layouts, photos, defect records). |
 
+In the building detail window, a bar of door chips at the top (Ringkasan, then each door) lets you jump to any door; Sebelum / Seterusnya at the bottom move one door at a time.
+
 `index.html` keeps its own copy of the Firebase/login/defect-record code, so a change to that part must be made in both `index.html` and `shared.js`.
 
 ## Data flow (Firebase)
@@ -26,7 +28,7 @@ photos/<photoId>                            compressed photos (referenced by id)
 - Tick a defect in a building (`index.html`) → saved on the building **and** copied to `defectLog`.
 - `kerosakan.html` reads `defectLog` + the live buildings. Status changes update both.
 - Records are never removed automatically: unticking, completing, repeating a defect, or deleting a door/building keeps the record and its photos. Only **Padam rekod** (or deleting a whole layout) removes them.
-- When a defect is marked **Selesai** (Kerosakan page or the Status Tindakan dropdown in the building window) it is automatically **unticked** in the building, ready for the next inspection. Its record stays as a finished repair, with **Buka Semula** if it needs to be reopened.
+- When a defect is marked **Selesai** (Kerosakan page or the Status Tindakan dropdown in the building window) you pick the **completion date** (default today; not before the report date, not in the future) and it is automatically **unticked** in the building, ready for the next inspection. Its record stays as a finished repair, with **Buka Semula** if it needs to be reopened.
 - A completed defect that happens again (ticked at the next inspection) becomes a **new** record; the old one stays.
 
 ## Navigation

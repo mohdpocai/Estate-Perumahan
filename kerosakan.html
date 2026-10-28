@@ -34,6 +34,26 @@
     </div>
   </div>
 
+  <!-- ===== TARIKH SELESAI MODAL ===== -->
+  <div class="modal-backdrop" id="doneDateBackdrop">
+    <div class="modal-panel" style="max-width:380px;">
+      <div class="modal-header">
+        <h2>Tarikh Selesai</h2>
+        <button class="btn-close-modal" onclick="closeDoneDate()">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Pilih tarikh kerosakan ini selesai dibaiki:</label>
+          <input type="date" id="doneDateInput">
+        </div>
+        <div class="def-actions">
+          <button class="btn ok" onclick="confirmDoneDate()">✔ Simpan</button>
+          <button class="btn" onclick="closeDoneDate()">Batal</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="app-container">
     <header id="app-header">
       <div class="brand"><span class="logo">LP2</span><span class="brand-text">Pengurusan Rumah Pekerja</span></div>
@@ -75,14 +95,43 @@
         </div>` : ''}
       </div>`;
     }
-    function setDefectAction(id, di, key, status) {
+    /* ===== choose the completion date when a defect is marked Selesai ===== */
+    let pendingDone = null;
+    function openDoneDateModal(id, di, key) {
+      const e = getChecklistEntry(id, di, 'defects', key, false);
+      pendingDone = { id, di, key };
+      const input = document.getElementById('doneDateInput');
+      input.max = todayStr();
+      input.min = e && e.tarikh ? e.tarikh : '';
+      input.value = todayStr();
+      document.getElementById('doneDateBackdrop').classList.add('open');
+    }
+    function closeDoneDate() {
+      document.getElementById('doneDateBackdrop').classList.remove('open');
+      const p = pendingDone; pendingDone = null;
+      if (p) afterDefectChange(p.id);        // re-draw, so a dropdown that showed "Selesai" goes back to the real status
+    }
+    function confirmDoneDate() {
+      const p = pendingDone;
+      if (!p) return;
+      const v = document.getElementById('doneDateInput').value;
+      const e = getChecklistEntry(p.id, p.di, 'defects', p.key, false);
+      if (!v) { alert('Sila pilih tarikh selesai.'); return; }
+      if (v > todayStr()) { alert('Tarikh selesai tidak boleh pada masa hadapan.'); return; }
+      if (e && e.tarikh && v < e.tarikh) { alert('Tarikh selesai tidak boleh sebelum tarikh dilaporkan (' + e.tarikh + ').'); return; }
+      document.getElementById('doneDateBackdrop').classList.remove('open');
+      pendingDone = null;
+      setDefectAction(p.id, p.di, p.key, 'selesai', v);
+    }
+    function setDefectAction(id, di, key, status, doneDate) {
       const e = getChecklistEntry(id, di, 'defects', key, false);
       if (!e) return;
+      if (status === 'selesai' && !doneDate) { openDoneDateModal(id, di, key); return; }   // ask for the date first
       if (status === 'selesai' && !e.gambarTindakan && !confirm('Tiada gambar bukti tindakan. Tandakan selesai tanpa gambar?')) { afterDefectChange(id); return; }
       e.tindakan = status;
       e.catatanTindakan = AUTO_NOTE[status] || '';
       if (status === 'proses' && !e.tarikhTindakan) e.tarikhTindakan = todayStr();
-      if (status === 'selesai') e.tarikhSelesai = todayStr(); else delete e.tarikhSelesai;
+      if (status === 'selesai') e.tarikhSelesai = doneDate; else delete e.tarikhSelesai;
       if (status === 'selesai') e.status = false;   // finished: untick it in the building, ready for the next inspection (the record stays)
       afterDefectChange(id);
     }

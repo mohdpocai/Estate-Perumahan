@@ -186,6 +186,12 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .btn-send{flex:1;min-width:84px;padding:9px 6px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-align:center}
 .btn-send.wa{background:#DCFCE7;border-color:#86EFAC;color:#166534}
 .btn-send.mail{background:#DBEAFE;border-color:#93C5FD;color:#1E40AF}
+/* door tabs (top of the detail window) */
+.door-tabs{display:none;gap:6px;overflow-x:auto;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--sf);flex-shrink:0;-webkit-overflow-scrolling:touch}
+.door-tab{flex-shrink:0;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:99px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;font-family:inherit}
+.door-tab.active{background:var(--nav);color:#fff;border-color:var(--nav)}
+.door-tab .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:5px;vertical-align:middle}
+.door-tab.vacant:not(.active){color:var(--mut);border-style:dashed}
 /* detail window paging */
 .modal-nav{display:none;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-top:1px solid var(--line);background:var(--sf);border-radius:0 0 16px 16px;flex-shrink:0}
 .modal-nav .btn{min-width:108px;padding:11px 12px}
@@ -326,10 +332,32 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         <h2 id="detailModalTitle">Butiran</h2>
         <button class="btn-close-modal" onclick="closeDetailModal()">✖</button>
       </div>
+      <div class="door-tabs" id="detailModalTabs"></div>
       <div class="modal-body" id="detailModalContent"></div>
       <div class="modal-nav" id="detailModalNav"></div>
     </div>
   </div>
+
+  <!-- ===== TARIKH SELESAI MODAL ===== -->
+  <div class="modal-backdrop" id="doneDateBackdrop">
+    <div class="modal-panel" style="max-width:380px;">
+      <div class="modal-header">
+        <h2>Tarikh Selesai</h2>
+        <button class="btn-close-modal" onclick="closeDoneDate()">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Pilih tarikh kerosakan ini selesai dibaiki:</label>
+          <input type="date" id="doneDateInput">
+        </div>
+        <div class="def-actions">
+          <button class="btn ok" onclick="confirmDoneDate()">✔ Simpan</button>
+          <button class="btn" onclick="closeDoneDate()">Batal</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <script>
     const GRID_SIZE = 20;
@@ -1628,6 +1656,23 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       document.getElementById('detailModalContent').scrollTop = 0;
     }
 
+    function renderDetailTabs(item, totalPages) {
+      const bar = document.getElementById('detailModalTabs');
+      if (totalPages <= 1) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+      const dotColor = { rosak: 'var(--bad)', ganti: '#D97706' };
+      const chips = [`<button class="door-tab ${detailPage === 0 ? 'active' : ''}" onclick="goDetailPage(0)">📋 Ringkasan</button>`];
+      item.doors.forEach((d, i) => {
+        const st = doorStatus(d);
+        const vacant = !(d.nama && d.nama.trim());
+        const name = d.label && d.label.trim() ? d.label.trim() : String(i + 1);
+        chips.push(`<button class="door-tab ${detailPage === i + 1 ? 'active' : ''} ${vacant ? 'vacant' : ''}" onclick="goDetailPage(${i + 1})" title="${escapeHTML(name)}${vacant ? ' (kosong)' : ''}">${escapeHTML(name)}${st !== 'ok' ? `<span class="dot" style="background:${dotColor[st]}"></span>` : ''}</button>`);
+      });
+      bar.style.display = 'flex';
+      bar.innerHTML = chips.join('');
+      const act = bar.querySelector('.door-tab.active');
+      if (act && act.scrollIntoView) { try { act.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (err) {} }
+    }
+
     function renderDetailNav(item, totalPages) {
       const nav = document.getElementById('detailModalNav');
       if (totalPages <= 1) { nav.style.display = 'none'; nav.innerHTML = ''; return; }
@@ -1730,6 +1775,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       }
 
       renderDetailNav(item, totalPages);
+      renderDetailTabs(item, totalPages);
       document.getElementById('detailModalContent').innerHTML = formHTML;
       document.getElementById('detailModalBackdrop').classList.add('open');
       loadMissingPhotos();
@@ -2112,14 +2158,43 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       if (document.getElementById('detailModalBackdrop').classList.contains('open')) openDetailModal(id);
       refreshBackgroundView();
     }
-    function setDefectAction(id, di, key, status) {
+    /* ===== choose the completion date when a defect is marked Selesai ===== */
+    let pendingDone = null;
+    function openDoneDateModal(id, di, key) {
+      const e = getChecklistEntry(id, di, 'defects', key, false);
+      pendingDone = { id, di, key };
+      const input = document.getElementById('doneDateInput');
+      input.max = todayStr();
+      input.min = e && e.tarikh ? e.tarikh : '';
+      input.value = todayStr();
+      document.getElementById('doneDateBackdrop').classList.add('open');
+    }
+    function closeDoneDate() {
+      document.getElementById('doneDateBackdrop').classList.remove('open');
+      const p = pendingDone; pendingDone = null;
+      if (p) afterDefectChange(p.id);        // re-draw, so a dropdown that showed "Selesai" goes back to the real status
+    }
+    function confirmDoneDate() {
+      const p = pendingDone;
+      if (!p) return;
+      const v = document.getElementById('doneDateInput').value;
+      const e = getChecklistEntry(p.id, p.di, 'defects', p.key, false);
+      if (!v) { alert('Sila pilih tarikh selesai.'); return; }
+      if (v > todayStr()) { alert('Tarikh selesai tidak boleh pada masa hadapan.'); return; }
+      if (e && e.tarikh && v < e.tarikh) { alert('Tarikh selesai tidak boleh sebelum tarikh dilaporkan (' + e.tarikh + ').'); return; }
+      document.getElementById('doneDateBackdrop').classList.remove('open');
+      pendingDone = null;
+      setDefectAction(p.id, p.di, p.key, 'selesai', v);
+    }
+    function setDefectAction(id, di, key, status, doneDate) {
       const e = getChecklistEntry(id, di, 'defects', key, false);
       if (!e) return;
+      if (status === 'selesai' && !doneDate) { openDoneDateModal(id, di, key); return; }   // ask for the date first
       if (status === 'selesai' && !e.gambarTindakan && !confirm('Tiada gambar bukti tindakan. Tandakan selesai tanpa gambar?')) { afterDefectChange(id); return; }
       e.tindakan = status;
       e.catatanTindakan = AUTO_NOTE[status] || '';
       if (status === 'proses' && !e.tarikhTindakan) e.tarikhTindakan = todayStr();
-      if (status === 'selesai') e.tarikhSelesai = todayStr(); else delete e.tarikhSelesai;
+      if (status === 'selesai') e.tarikhSelesai = doneDate; else delete e.tarikhSelesai;
       if (status === 'selesai') e.status = false;   // finished: untick it in the building, ready for the next inspection (the record stays)
       afterDefectChange(id);
     }
