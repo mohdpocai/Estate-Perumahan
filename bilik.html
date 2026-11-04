@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Rekod Bilik - LP2</title>
+  <!-- Firebase (compat SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <link rel="stylesheet" href="shared.css?v=4">
+  <style>
+#roomView{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#roomScroll{flex:1;overflow-y:auto;padding:14px 14px 48px;max-width:640px;width:100%;margin:0 auto}
+.room-head{background:var(--sf);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:12px}
+.room-bld{font-size:12px;color:var(--mut);font-weight:600}
+.room-title{font-size:26px;margin:2px 0 4px;color:var(--nav);line-height:1.2;word-break:break-word}
+.room-res{font-size:13px}
+.room-flags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.room-save{font-size:11px;color:var(--mut);margin-top:8px;min-height:14px}
+.room-msg{text-align:center;padding:56px 16px;color:var(--mut);line-height:1.7}
+.room-msg b{color:var(--ink)}
+.room-foot{text-align:center;margin-top:16px}
+.room-foot a{text-decoration:none;display:inline-block}
+.item-row .item-header{min-height:28px}
+</style>
+</head>
+<body>
+
+  <div id="login-overlay">
+    <div class="login-box">
+      <h2>🏘️ Pengurusan LP2</h2>
+      <p id="loginMessage">Sila log masuk untuk mengakses rekod.</p>
+      <div id="loginForm">
+        <input type="email" id="loginEmail" placeholder="Emel" autocomplete="username">
+        <input type="password" id="loginPassword" placeholder="Kata laluan" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin()">
+        <button onclick="doLogin()">Log Masuk</button>
+      </div>
+      <div id="loginError"></div>
+    </div>
+  </div>
+
+  <div id="camera-modal">
+    <h3 style="color:#38BDF8; margin-bottom:10px;">Tangkap Gambar Bukti</h3>
+    <video id="camera-video" autoplay playsinline></video>
+    <div class="camera-controls">
+      <button class="btn-capture" onclick="takePicture()">📸 Ambil Gambar</button>
+      <button class="btn-cancel-cam" onclick="closeCameraModal()">Batal</button>
+    </div>
+  </div>
+
+  <!-- ===== TARIKH SELESAI MODAL ===== -->
+  <div class="modal-backdrop" id="doneDateBackdrop">
+    <div class="modal-panel" style="max-width:380px;">
+      <div class="modal-header">
+        <h2>Tarikh Selesai</h2>
+        <button class="btn-close-modal" onclick="closeDoneDate()">✖</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Pilih tarikh kerosakan ini selesai dibaiki:</label>
+          <input type="date" id="doneDateInput">
+        </div>
+        <div class="def-actions">
+          <button class="btn ok" onclick="confirmDoneDate()">✔ Simpan</button>
+          <button class="btn" onclick="closeDoneDate()">Batal</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-container">
+    <header id="app-header">
+      <div class="brand"><span class="logo">LP2</span><span style="font-weight:600;font-size:14px;">Rekod Bilik</span></div>
+      <select id="layoutSelect" style="display:none"></select>
+      <span style="flex:1"></span>
+      <span id="syncStatus">...</span>
+      <button class="icon-btn" onclick="doLogout()" title="Log Keluar">⎋</button>
+    </header>
+    <div id="roomView"><div id="roomScroll"></div></div>
+  </div>
+
+  <script src="shared.js?v=4"></script>
+  <script>
+    /* ===== which room this page is for (from the QR code) ===== */
+    const QS = new URLSearchParams(location.search);
+    const Q_LAYOUT = QS.get('l') || '';
+    const Q_BUILDING = QS.get('b') || '';
+    const Q_DOOR = /^\d+$/.test(QS.get('d') || '') ? parseInt(QS.get('d'), 10) : -1;
+    const FIXED_LAYOUT = Q_LAYOUT;                     // shared.js: never switch to another layout
+
+    const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
+
+    function roomCtx() {
+      const item = elements.find(e => e.id === Q_BUILDING);
+      const door = item && item.doors && item.doors[Q_DOOR];
+      return door ? { item, door, di: Q_DOOR } : null;
+    }
+    function roomState() {
+      if (!Q_LAYOUT || !Q_BUILDING || Q_DOOR < 0) return 'badlink';
+      if (!dbReady || !Object.keys(layouts).length) return 'loading';
+      if (!layouts[Q_LAYOUT]) return 'nolayout';
+      if (!elementsLoaded) return 'loading';
+      const item = elements.find(e => e.id === Q_BUILDING);
+      if (!item) return 'nobuilding';
+      return roomCtx() ? 'ok' : 'nodoor';
+    }
+
+    /* ===== the same checklist forms as the building window ===== */
+    function renderChecklistItemRow(itemId, doorIndex, listKey, chk, itemData) {
+      const isChecked = itemData.status ? 'checked' : '';
+      const isDefect = listKey === 'defects';
+      const rowClass = (isDefect || itemData.keadaan) && itemData.status ? 'item-row item-row-alert' : 'item-row';
+      return `
+        <div class="${rowClass}">
+          <div class="item-header">
+            <span>${chk.label}${!isDefect && itemData.status && itemData.keadaan ? ` <span class="badge ${itemData.keadaan === 'rosak' ? 'st-new' : 'st-prog'}">${COND[itemData.keadaan]}</span>` : ''}${isDefect && itemData.status ? ` <span class="badge ${DEF_STATUS[defStatus(itemData)].c}">${DEF_STATUS[defStatus(itemData)].l}</span>` : ''}</span>
+            <input type="checkbox" ${isChecked} onchange="updateItemStatus('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.checked)">
+          </div>
+          ${itemData.status ? `
+            <div class="item-details">
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:10px;">${isDefect ? 'Tarikh Dilaporkan:' : 'Tarikh Diganti / Dibekal:'}</label>
+                <input type="date" value="${itemData.tarikh || ''}" onchange="updateItemDate('${itemId}',${doorIndex}, '${listKey}', '${chk.key}', this.value)">
+              </div>
+              ${isDefect ? `
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:10px;">Catatan:</label>
+                  <input type="text" value="${escapeHTML(itemData.catatan || '')}" maxlength="150" placeholder="Perincian kerosakan..." onchange="updateItemRemarks('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.value)">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:12px;">Status Tindakan:</label>
+                  <select onchange="setDefectAction('${itemId}', ${doorIndex}, '${chk.key}', this.value)">
+                    ${Object.keys(DEF_STATUS).map(k => `<option value="${k}" ${defStatus(itemData) === k ? 'selected' : ''}>${DEF_STATUS[k].l}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:12px;">Pihak Bertindak / Kontraktor:</label>
+                  <input type="text" value="${escapeHTML(itemData.pihak || '')}" maxlength="60" placeholder="Cth: Unit Penyelenggaraan" onchange="setDefectField('${itemId}', ${doorIndex}, '${chk.key}', 'pihak', this.value)">
+                </div>
+                ${evidenceBlock(itemId, doorIndex, chk.key, itemData)}
+              ` : ''}
+              ${!isDefect ? `<div class="form-group" style="margin:0;">
+                <label style="font-size:12px;">Keadaan Barang:</label>
+                <select onchange="updateItemCondition('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.value)">
+                  <option value="" ${!itemData.keadaan ? 'selected' : ''}>Baik</option>
+                  <option value="ganti" ${itemData.keadaan === 'ganti' ? 'selected' : ''}>Perlu Diganti</option>
+                  <option value="rosak" ${itemData.keadaan === 'rosak' ? 'selected' : ''}>Rosak</option>
+                </select>
+              </div>` : ''}
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:10px;">Gambar Bukti${isDefect ? ' Kerosakan' : ' Kelengkapan'}:</label>
+                <div class="image-action-buttons">
+                  <button class="btn-camera-action" type="button" onclick="openCameraModal('${itemId}',${doorIndex}, '${listKey}', '${chk.key}')">📸 Kamera</button>
+                  <label class="btn-gallery-action">
+                    🖼️ Galeri / Fail
+                    <input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage(event, '${itemId}',${doorIndex}, '${listKey}', '${chk.key}')">
+                  </label>
+                </div>
+                ${itemData.gambar ? `
+                  <div class="img-preview-container">
+                    <img ${itemData.gambar.startsWith('data:') ? '' : `data-photo="${itemData.gambar}"`} src="${photoSrc(itemData.gambar)}" class="img-preview">
+                    <button class="btn-remove-img" onclick="removeItemImage('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}')" title="Padam Gambar">✖</button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function renderChecklistSection(itemId, doorIndex, door, listKey, titleClass, titleText, configList) {
+      const store = door[listKey] || {};
+      const rows = configList.map(chk => {
+        const itemData = store[chk.key] || { status: false, tarikh: '', gambar: '', catatan: '' };
+        return renderChecklistItemRow(itemId, doorIndex, listKey, chk, itemData);
+      }).join('');
+      return `<div class="${titleClass}">${titleText}</div>${rows}`;
+    }
+
+    function countDoorReplace(d) {
+      return Object.values(d.checklist || {}).filter(e => e && e.status && e.keadaan).length;
+    }
+
+    function updateItemStatus(id, doorIndex, listKey, key, checked) {
+      const entry = getChecklistEntry(id, doorIndex, listKey, key, true);
+      if (!entry) return;
+      const isDef = listKey === 'defects';
+      if (isDef && checked && entry.tindakan === 'selesai') {
+        // the same defect happening again is a NEW report; the completed one stays in the records
+        ['logId', 'tarikh', 'tarikhSelesai', 'tarikhTindakan', 'pihak', 'catatan', 'catatanTindakan', 'gambar', 'gambarTindakan'].forEach(k => { delete entry[k]; });
+      }
+      entry.status = checked;
+      if (checked && !(isDef && entry.tarikh)) entry.tarikh = todayStr();
+      if (isDef && checked && (!entry.tindakan || entry.tindakan === 'selesai')) entry.tindakan = 'baru';
+      saveToStorage();
+      renderRoom(true);
+    }
+    function updateItemCondition(id, di, listKey, key, val) {
+      const e = getChecklistEntry(id, di, listKey, key, false);
+      if (!e) return;
+      e.keadaan = val;
+      if (val) e.tarikh = todayStr();
+      saveToStorage();
+      renderRoom(true);
+    }
+    function updateItemDate(id, doorIndex, listKey, key, dateVal) {
+      const entry = getChecklistEntry(id, doorIndex, listKey, key, false);
+      if (!entry) return;
+      entry.tarikh = dateVal;
+      saveToStorage();
+    }
+    function updateItemRemarks(id, doorIndex, listKey, key, val) {
+      const entry = getChecklistEntry(id, doorIndex, listKey, key, false);
+      if (!entry) return;
+      entry.catatan = val.trim();
+      saveToStorage();
+    }
+
+    function evidenceBlock(id, di, key, e) {
+      const a = `'${id}', ${di}, 'defects', '${key}', 'gambarTindakan'`;
+      return `<div class="evidence">
+        <label>📎 Gambar Bukti Tindakan / Pembaikan:</label>
+        <div class="image-action-buttons">
+          <button class="btn-camera-action" type="button" onclick="openCameraModal(${a})">📸 Kamera</button>
+          <label class="btn-gallery-action">🖼️ Galeri / Fail
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadItemImage(event, ${a})">
+          </label>
+        </div>
+        ${e.gambarTindakan ? `<div class="img-preview-container">
+          <img ${e.gambarTindakan.startsWith('data:') ? '' : `data-photo="${e.gambarTindakan}"`} src="${photoSrc(e.gambarTindakan)}" class="img-preview">
+          <button class="btn-remove-img" onclick="removeItemImage(${a})" title="Padam Gambar">✖</button>
+        </div>` : ''}
+      </div>`;
+    }
+
+    /* ===== choose the completion date when a defect is marked Selesai ===== */
+    let pendingDone = null;
+    function openDoneDateModal(id, di, key) {
+      const e = getChecklistEntry(id, di, 'defects', key, false);
+      pendingDone = { id, di, key };
+      const input = document.getElementById('doneDateInput');
+      input.max = todayStr();
+      input.min = e && e.tarikh ? e.tarikh : '';
+      input.value = todayStr();
+      document.getElementById('doneDateBackdrop').classList.add('open');
+    }
+    function closeDoneDate() {
+      document.getElementById('doneDateBackdrop').classList.remove('open');
+      const p = pendingDone; pendingDone = null;
+      if (p) afterDefectChange(p.id);        // re-draw, so a dropdown that showed "Selesai" goes back to the real status
+    }
+    function confirmDoneDate() {
+      const p = pendingDone;
+      if (!p) return;
+      const v = document.getElementById('doneDateInput').value;
+      const e = getChecklistEntry(p.id, p.di, 'defects', p.key, false);
+      if (!v) { alert('Sila pilih tarikh selesai.'); return; }
+      if (v > todayStr()) { alert('Tarikh selesai tidak boleh pada masa hadapan.'); return; }
+      if (e && e.tarikh && v < e.tarikh) { alert('Tarikh selesai tidak boleh sebelum tarikh dilaporkan (' + e.tarikh + ').'); return; }
+      document.getElementById('doneDateBackdrop').classList.remove('open');
+      pendingDone = null;
+      setDefectAction(p.id, p.di, p.key, 'selesai', v);
+    }
+    function setDefectAction(id, di, key, status, doneDate) {
+      const e = getChecklistEntry(id, di, 'defects', key, false);
+      if (!e) return;
+      if (status === 'selesai' && !doneDate) { openDoneDateModal(id, di, key); return; }   // ask for the date first
+      if (status === 'selesai' && !e.gambarTindakan && !confirm('Tiada gambar bukti tindakan. Tandakan selesai tanpa gambar?')) { afterDefectChange(id); return; }
+      e.tindakan = status;
+      e.catatanTindakan = AUTO_NOTE[status] || '';
+      if (status === 'proses' && !e.tarikhTindakan) e.tarikhTindakan = todayStr();
+      if (status === 'selesai') e.tarikhSelesai = doneDate; else delete e.tarikhSelesai;
+      if (status === 'selesai') e.status = false;   // finished: untick it in the building, ready for the next inspection (the record stays)
+      afterDefectChange(id);
+    }
+    function setDefectField(id, di, key, field, val) {
+      const e = getChecklistEntry(id, di, 'defects', key, false);
+      if (!e) return;
+      e[field] = val.trim();
+      saveToStorage();
+    }
+
+
+    /* ===== saving: only THIS room is written (so people filling other rooms of the same building never overwrite each other) ===== */
+    let lastRoomJson = '';
+    let saveInfo = '';
+    function setSaveState(st) {
+      saveInfo = st === 'saving' ? '⏳ Menyimpan…' : st === 'saved' ? '✔ Disimpan ' + new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' }) : '⚠️ Gagal simpan';
+      const el = document.getElementById('saveState');
+      if (el) el.textContent = saveInfo;
+    }
+    function saveToStorage() {
+      if (!dbReady || !currentLayoutId) return;
+      const c = roomCtx();
+      if (!c) return;
+      if (logLoaded) ensureLogIds();
+      const updates = {};
+      const json = JSON.stringify(c.door);
+      if (json !== lastRoomJson) {
+        updates['layouts/' + currentLayoutId + '/elements/' + c.item.id + '/doors/' + c.di] = JSON.parse(json);
+        lastRoomJson = json;
+      }
+      if (logLoaded) Object.assign(updates, defectLogUpdates());
+      if (!Object.keys(updates).length) return;
+      setSaveState('saving');
+      db.ref().update(updates).then(() => setSaveState('saved'), err => { setSaveState('error'); alert('Gagal simpan ke Firebase: ' + err.message); });
+    }
+    function afterDefectChange() { saveToStorage(); renderRoom(true); }
+
+    /* ===== drawing the page ===== */
+    let lastSig = null, pendingRender = false;
+    function typingInside(root) {
+      const a = document.activeElement;
+      return !!(a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !['checkbox', 'file', 'button'].includes(a.type));
+    }
+    function msg(html) {
+      return `<div class="room-msg">${html}<div style="margin-top:16px;"><a class="btn pri" style="text-decoration:none;display:inline-block;" href="index.html">Buka aplikasi utama</a></div></div>`;
+    }
+
+    function renderPage() {                  // called by shared.js whenever data arrives or changes
+      const c = roomCtx();
+      if (c) lastRoomJson = JSON.stringify(c.door);
+      renderRoom(false);
+    }
+
+    function renderRoom(force) {
+      const root = document.getElementById('roomScroll');
+      const st = roomState();
+      const c = st === 'ok' ? roomCtx() : null;
+      const sig = st + '|' + (c ? c.item.name + '|' + JSON.stringify(c.door) : '');
+      if (!force && sig === lastSig) return;                       // nothing for THIS room changed
+      if (!force && typingInside(root)) { pendingRender = true; return; }   // never redraw under someone's keyboard
+      lastSig = sig; pendingRender = false;
+      updateDefectBadge();
+
+      if (st === 'loading') { root.innerHTML = `<div class="room-msg">Memuatkan bilik…</div>`; return; }
+      if (st === 'badlink') { root.innerHTML = msg('<b>Pautan QR tidak sah.</b><br>Imbas semula kod QR pada pintu bilik.'); return; }
+      if (st === 'nolayout') { root.innerHTML = msg('<b>Layout tidak dijumpai.</b><br>Layout untuk kod QR ini mungkin telah dipadam.'); return; }
+      if (st === 'nobuilding') { root.innerHTML = msg('<b>Bangunan tidak dijumpai.</b><br>Bangunan untuk kod QR ini mungkin telah dipadam.'); return; }
+      if (st === 'nodoor') {
+        const b = elements.find(e => e.id === Q_BUILDING);
+        root.innerHTML = msg(`<b>Bilik ini tidak lagi wujud</b> pada ${escapeHTML(b.name || 'bangunan ini')}.<br>Pintu ini telah dibuang.`); return;
+      }
+
+      const { item, door, di } = c;
+      const label = door.label && door.label.trim() ? door.label.trim() : 'Pintu ' + (di + 1);
+      const resident = door.nama && door.nama.trim() ? door.nama.trim() : '';
+      const repl = countDoorReplace(door);
+      const openDefs = Object.values(door.defects || {}).filter(isOpenDefect).length;
+      const flags = [
+        openDefs ? `<span class="badge st-new">⚠️ ${openDefs} kerosakan belum selesai</span>` : '',
+        repl ? `<span class="badge st-prog">🔧 ${repl} perlu ganti / rosak</span>` : '',
+        !openDefs && !repl ? `<span class="badge st-done">✔ Tiada isu direkod</span>` : ''
+      ].join('');
+      root.innerHTML = `
+        <div class="room-head">
+          <div class="room-bld">🏠 ${escapeHTML(item.name || 'Bangunan')} • ${escapeHTML(layouts[Q_LAYOUT] || '')}</div>
+          <h1 class="room-title">${escapeHTML(label)}</h1>
+          <div class="room-res">${resident ? '👤 ' + escapeHTML(resident) + (door.jumlah ? ' • ' + escapeHTML(String(door.jumlah)) + ' orang' : '') : '🚪 Tiada penghuni direkod'}</div>
+          <div class="room-flags">${flags}</div>
+          <div class="room-save" id="saveState">${escapeHTML(saveInfo)}</div>
+        </div>
+        <div class="door-card">${renderChecklistSection(item.id, di, door, 'checklist', 'checklist-title', 'Rekod Kelengkapan & Penggantian:', ITEMS_CHECKLIST)}</div>
+        <div class="door-card">${renderChecklistSection(item.id, di, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}</div>
+        <div class="room-foot"><a class="btn" href="index.html?open=${encodeURIComponent(item.id)}">Buka bangunan ini</a></div>`;
+      loadMissingPhotos();
+    }
+    document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender) renderRoom(false); }, 0));
+
+    /* ===================== INIT ===================== */
+    renderRoom(true);
+    initFirebase();
+  </script>
+</body>
+</html>

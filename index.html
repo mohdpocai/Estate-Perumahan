@@ -11,6 +11,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <!-- QR code generator (MIT, bundled in this repo) -->
+  <script src="qrcode.js?v=1"></script>
 
   <style>
 :root{--bg:#F3F5F9;--sf:#fff;--line:#E3E8EF;--ink:#0F172A;--mut:#64748B;--nav:#0B2545;--brand:#1D6FB8;--ok:#15803D;--warn:#B45309;--bad:#DC2626;--r:10px}
@@ -186,6 +188,24 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .btn-send{flex:1;min-width:84px;padding:9px 6px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-align:center}
 .btn-send.wa{background:#DCFCE7;border-color:#86EFAC;color:#166534}
 .btn-send.mail{background:#DBEAFE;border-color:#93C5FD;color:#1E40AF}
+/* QR codes */
+.qr-box{width:min(78vw,300px);margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px}
+.qr-box svg{display:block;width:100%;height:auto}
+.qr-hint{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5}
+.qr-url{font-size:10px;color:var(--mut);word-break:break-all;margin-top:10px;user-select:all}
+#qr-print{display:none}
+.qp-grid{display:grid;grid-template-columns:1fr 1fr;gap:5mm}
+.qr-card-print{border:1.5px dashed #666;border-radius:3mm;padding:4mm 4mm 3mm;text-align:center;break-inside:avoid;page-break-inside:avoid;color:#000;font-family:Inter,'Segoe UI',system-ui,sans-serif}
+.qp-b{font-size:12pt;font-weight:700;line-height:1.2}
+.qp-d{font-size:18pt;font-weight:800;margin:0 0 2mm;line-height:1.2}
+.qp-qr svg{width:52mm;height:52mm}
+.qp-t{font-size:8.5pt;margin-top:1mm;line-height:1.3}
+@media print{
+  @page{size:A4;margin:10mm}
+  html,body{height:auto!important;overflow:visible!important;background:#fff!important}
+  body.printing-qr>*:not(#qr-print){display:none!important}
+  body.printing-qr #qr-print{display:block!important}
+}
 /* door tabs (top of the detail window) */
 .door-tabs{display:none;gap:6px;overflow-x:auto;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--sf);flex-shrink:0;-webkit-overflow-scrolling:touch}
 .door-tab{flex-shrink:0;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:99px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;font-family:inherit}
@@ -358,6 +378,27 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
     </div>
   </div>
 
+
+  <!-- ===== QR MODAL ===== -->
+  <div class="modal-backdrop" id="qrModalBackdrop">
+    <div class="modal-panel" style="max-width:400px;">
+      <div class="modal-header">
+        <h2 id="qrModalTitle">QR Bilik</h2>
+        <button class="btn-close-modal" onclick="closeQrModal()">✖</button>
+      </div>
+      <div class="modal-body" style="text-align:center;">
+        <div id="qrModalBox" class="qr-box"></div>
+        <div class="qr-hint">Imbas kod ini untuk isi <b>Rekod Kelengkapan</b> dan <b>Senarai Semak Kerosakan</b> bilik ini.<br>Perlu log masuk dahulu.</div>
+        <div class="send-row" style="margin-top:12px;">
+          <button class="btn-send" onclick="printQr(qrCurrent.id, qrCurrent.di)">🖨️ Cetak</button>
+          <button class="btn-send" onclick="saveQrPng()">💾 Simpan gambar</button>
+          <button class="btn-send" onclick="copyRoomLink()">🔗 Salin pautan</button>
+        </div>
+        <div id="qrModalUrl" class="qr-url"></div>
+      </div>
+    </div>
+  </div>
+  <div id="qr-print"></div>
 
   <script>
     const GRID_SIZE = 20;
@@ -1624,6 +1665,101 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       return `<div class="${titleClass}">${titleText}</div>${rows}`;
     }
 
+    /* ===================== QR CODE PER ROOM ===================== */
+    let qrCurrent = null;
+
+    function roomUrl(item, di) {
+      const u = new URL('bilik.html', location.href);
+      u.search = ''; u.hash = '';
+      u.searchParams.set('l', currentLayoutId);
+      u.searchParams.set('b', item.id);
+      u.searchParams.set('d', String(di));
+      return u.toString();
+    }
+    function roomLabel(item, di) {
+      const d = item.doors && item.doors[di];
+      return d && d.label && d.label.trim() ? d.label.trim() : 'Pintu ' + (di + 1);
+    }
+    function qrSvg(text) {
+      const qr = makeQr(text, 'M'), n = qr.getModuleCount(), q = 4, size = n + q * 2;
+      let p = '';
+      for (let r = 0; r < n; r++) {
+        let c = 0;
+        while (c < n) {
+          if (qr.isDark(r, c)) { const st = c; while (c < n && qr.isDark(r, c)) c++; p += `M${st + q} ${r + q}h${c - st}v1h-${c - st}z`; }
+          else c++;
+        }
+      }
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path d="${p}" fill="#000"/></svg>`;
+    }
+
+    function openQrModal(id, di) {
+      const item = elements.find(e => e.id === id);
+      if (!item || !item.doors || !item.doors[di]) return;
+      const url = roomUrl(item, di);
+      qrCurrent = { id, di, url };
+      document.getElementById('qrModalTitle').textContent = `${item.name || 'Bangunan'} • ${roomLabel(item, di)}`;
+      document.getElementById('qrModalBox').innerHTML = qrSvg(url);
+      document.getElementById('qrModalUrl').textContent = url;
+      document.getElementById('qrModalBackdrop').classList.add('open');
+    }
+    function closeQrModal() { document.getElementById('qrModalBackdrop').classList.remove('open'); }
+
+    function copyRoomLink() {
+      if (!qrCurrent) return;
+      const url = qrCurrent.url;
+      const fallback = () => { prompt('Salin pautan ini:', url); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(() => alert('Pautan disalin.'), fallback);
+      else fallback();
+    }
+
+    /* print one QR (id + door index) or all the QR codes of a building (door index omitted) */
+    function printQr(id, di) {
+      const item = elements.find(e => e.id === id);
+      if (!item || !item.doors || !item.doors.length) return;
+      const list = (di === undefined || di === null) ? item.doors.map((_, i) => i) : [di];
+      const cards = list.map(i => `<div class="qr-card-print">
+        <div class="qp-b">${escapeHTML(item.name || 'Bangunan')}</div>
+        <div class="qp-d">${escapeHTML(roomLabel(item, i))}</div>
+        <div class="qp-qr">${qrSvg(roomUrl(item, i))}</div>
+        <div class="qp-t">Imbas untuk isi Rekod Kelengkapan &amp; Senarai Semak Kerosakan bilik ini</div>
+      </div>`).join('');
+      const box = document.getElementById('qr-print');
+      box.innerHTML = `<div class="qp-grid">${cards}</div>`;
+      document.body.classList.add('printing-qr');
+      const done = () => { document.body.classList.remove('printing-qr'); box.innerHTML = ''; window.removeEventListener('afterprint', done); };
+      window.addEventListener('afterprint', done);
+      setTimeout(() => window.print(), 80);
+    }
+
+    /* save one QR as a PNG picture (name + door + code) to send to a print shop */
+    function saveQrPng() {
+      if (!qrCurrent) return;
+      const item = elements.find(e => e.id === qrCurrent.id);
+      if (!item) return;
+      const qr = makeQr(qrCurrent.url, 'M'), n = qr.getModuleCount(), q = 4;
+      const scale = Math.max(8, Math.floor(720 / (n + q * 2)));
+      const qrPx = (n + q * 2) * scale, pad = 60, W = qrPx + pad * 2, top = 190, bottom = 120, H = top + qrPx + bottom;
+      const cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      const g = cv.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#000'; g.textAlign = 'center';
+      g.font = '700 44px Arial, sans-serif'; g.fillText(item.name || 'Bangunan', W / 2, 80, W - 40);
+      g.font = '800 72px Arial, sans-serif'; g.fillText(roomLabel(item, qrCurrent.di), W / 2, 160, W - 40);
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect(pad + (c + q) * scale, top + (r + q) * scale, scale, scale);
+      g.font = '28px Arial, sans-serif';
+      g.fillText('Imbas untuk isi Rekod Kelengkapan', W / 2, top + qrPx + 40, W - 40);
+      g.fillText('& Senarai Semak Kerosakan bilik ini', W / 2, top + qrPx + 80, W - 40);
+      cv.toBlob(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = ('QR_' + (item.name || 'Bangunan') + '_' + roomLabel(item, qrCurrent.di)).replace(/[^A-Za-z0-9]+/g, '_') + '.png';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      }, 'image/png');
+    }
+
     let detailPage = 0, detailPageItemId = null;
 
     function renderDoorCard(item, index) {
@@ -1634,6 +1770,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       return `
         <div class="door-card">
           <div class="door-card-title">${escapeHTML(doorTitle)}${countDoorReplace(door) ? ` <span class="badge st-prog">⚠️ ${countDoorReplace(door)} perlu ganti / rosak</span>` : ''}</div>
+          <div class="send-row" style="margin-bottom:10px;"><button class="btn-send" type="button" onclick="openQrModal('${item.id}', ${index})">📱 Kod QR bilik ini</button></div>
           <input type="text" class="door-name-input" value="${escapeHTML(door.label || '')}" maxlength="40" placeholder="Nama pintu/bilik (cth: Bilik A) — pilihan" onchange="updateDoorData('${item.id}', ${index}, 'label', this.value)">
           <div class="form-group">
             <label>Nama Penghuni:</label>
@@ -1715,6 +1852,11 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         <div class="door-ov-head"><b>Ringkasan Pintu</b><span>${filled} / ${doors.length} berpenghuni</span></div>
         <div class="door-ov-grid" style="grid-template-columns:repeat(${cols},minmax(0,1fr));">${tiles}</div>
         <div class="door-ov-legend"><span><i style="background:var(--ok)"></i>Baik</span><span><i style="background:#D97706"></i>Perlu ganti</span><span><i style="background:var(--bad)"></i>Rosak / kerosakan</span><span><i style="background:#CBD5E1"></i>Kosong</span></div>
+        <div class="send-card" style="margin-top:12px;">
+          <div class="send-title">📱 Kod QR setiap bilik</div>
+          <div class="send-row"><button class="btn-send" type="button" onclick="printQr('${item.id}')">🖨️ Cetak QR semua bilik (${doors.length})</button></div>
+          <div class="qr-hint" style="margin-top:8px;">Tampal pada pintu setiap bilik. Atau buka satu pintu untuk lihat / simpan QR bilik itu sahaja.</div>
+        </div>
       </div>`;
     }
 

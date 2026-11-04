@@ -20,6 +20,7 @@ let photoCache = {};
 let layouts = {};
 let currentLayoutId = localStorage.getItem('currentLayoutId_v1') || '';
 let listeningLayoutId = null;
+let elementsLoaded = false;      // true once the buildings of the current layout have arrived
 let searchQuery = '';
 let cameraStream = null;
 let activeCamTarget = { houseId: null, doorIndex: null, listKey: null, key: null };
@@ -285,7 +286,11 @@ function startCloudSync() {
     layouts = snap.val() || {};
     const ids = Object.keys(layouts);
     if (!ids.length) { renderPage(); return; }
-    if (!currentLayoutId || !layouts[currentLayoutId]) {
+    if (typeof FIXED_LAYOUT === 'string' && FIXED_LAYOUT) {
+      // opened from a QR code: always use that layout, and never remember it as the user's own choice
+      currentLayoutId = FIXED_LAYOUT;
+      if (!layouts[currentLayoutId]) { renderPage(); return; }
+    } else if (!currentLayoutId || !layouts[currentLayoutId]) {
       currentLayoutId = ids[0];
       localStorage.setItem('currentLayoutId_v1', currentLayoutId);
     }
@@ -298,13 +303,14 @@ function attachElementsListener() {
   if (listeningLayoutId) db.ref('layouts/' + listeningLayoutId + '/elements').off();
   listeningLayoutId = currentLayoutId;
   attachLogListener();
-  elements = []; lastSaved = {};
+  elements = []; lastSaved = {}; elementsLoaded = false;
   renderPage();
   db.ref('layouts/' + currentLayoutId + '/elements').on('value', snap => {
     const val = snap.val() || {};
     elements = Object.keys(val).map(k => normalizeElement(val[k])).sort((a, b) => idTime(a.id) - idTime(b.id));
     lastSaved = {};
     elements.forEach(e => { lastSaved[e.id] = JSON.stringify(e); });
+    elementsLoaded = true;
     backfillLog();
     renderPage();
   }, err => alert('Tiada kebenaran membaca data: ' + err.message));
@@ -320,7 +326,7 @@ function stopCloudSync() {
   dbReady = false;
   listeningLayoutId = null;
   layouts = {};
-  elements = []; lastSaved = {};
+  elements = []; lastSaved = {}; elementsLoaded = false;
   renderPage();
 }
 
