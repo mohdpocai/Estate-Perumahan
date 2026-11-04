@@ -650,8 +650,20 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       });
       if (logLoaded) Object.assign(updates, defectLogUpdates());
       if (Object.keys(updates).length) {
-        db.ref().update(updates).catch(err => alert('Gagal simpan ke Firebase: ' + err.message));
+        return db.ref().update(updates).then(() => true, err => { alert('Gagal simpan ke Firebase: ' + err.message); return false; });
       }
+      return Promise.resolve(true);
+    }
+
+    /* explicit Simpan button on a door page (everything is also saved automatically as you type/tick) */
+    function saveRoomNow() {
+      const msg = document.getElementById('roomSaveMsg');
+      const hm = () => new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' });
+      if (msg) msg.textContent = '⏳ Menyimpan…';
+      Promise.resolve(saveToStorage()).then(ok => {
+        const m = document.getElementById('roomSaveMsg');
+        if (m) m.textContent = ok === false ? '⚠️ Gagal simpan' : '✔ Disimpan ' + hm();
+      });
     }
 
     function idTime(id) { return parseInt(String(id).split('_').pop(), 10) || 0; }
@@ -1798,8 +1810,10 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
           ${renderChecklistSection(item.id, index, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}
         </div>
         <div class="door-card" style="text-align:center;">
+          <button class="btn-send" type="button" style="width:100%;padding:14px;font-size:16px;font-weight:700;background:#1D4ED8;color:#fff;border-color:#1D4ED8;margin-bottom:8px;" onclick="saveRoomNow()">💾 Simpan</button>
+          <div class="card-sub" id="roomSaveMsg" style="min-height:16px;margin:0 0 10px;"></div>
           <button class="btn-send wa" type="button" style="width:100%;padding:14px;font-size:16px;font-weight:700;" onclick="sendRoomReport('${item.id}', ${index})">💬 Hantar rekod bilik ini ke WhatsApp</button>
-          <div class="card-sub" style="margin-top:8px;">Rekod disimpan automatik. Tekan butang ini selepas semua senarai semak siap diisi.</div>
+          <div class="card-sub" style="margin-top:8px;">Rekod disimpan automatik. Tekan Simpan untuk pastikan, kemudian hantar selepas semua senarai semak siap diisi.</div>
         </div>
       `;
     }

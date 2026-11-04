@@ -22,6 +22,7 @@
 .room-msg b{color:var(--ink)}
 .room-send{text-align:center}
 .btn-wa{width:100%;background:#16A34A;color:#fff;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer}
+.btn-save{width:100%;background:#1D4ED8;color:#fff;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer}
 .btn-share{width:100%;background:#fff;color:#16A34A;border:2px solid #16A34A;border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}
 .room-hint{font-size:11px;color:var(--mut);margin-top:8px;line-height:1.5}
 .item-row .item-header{min-height:28px}
@@ -276,8 +277,7 @@
     let saveInfo = '';
     function setSaveState(st) {
       saveInfo = st === 'saving' ? '⏳ Menyimpan…' : st === 'saved' ? '✔ Disimpan ' + new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' }) : '⚠️ Gagal simpan';
-      const el = document.getElementById('saveState');
-      if (el) el.textContent = saveInfo;
+      document.querySelectorAll('.js-save-state').forEach(el => { el.textContent = saveInfo; });
     }
     /* the defect records this room can touch are read first (by exact id), so creation dates / "already used" ids are right */
     const primed = {};
@@ -294,10 +294,10 @@
         }, () => { primed[id] = true; })));
     }
     function saveToStorage() {
-      if (!dbReady || !roomCtx()) return;
-      primeLog().then(() => {
+      if (!dbReady || !roomCtx()) return Promise.resolve(false);
+      return primeLog().then(() => {
         const c = roomCtx();
-        if (!c) return;
+        if (!c) return false;
         logLoaded = true;
         ensureLogIds();
         const updates = {};
@@ -307,10 +307,14 @@
           lastRoomJson = json;
         }
         Object.assign(updates, defectLogUpdates());
-        if (!Object.keys(updates).length) return;
+        if (!Object.keys(updates).length) return true;
         setSaveState('saving');
-        return db.ref().update(updates).then(() => setSaveState('saved'), err => { setSaveState('error'); alert('Gagal simpan: ' + err.message); });
+        return db.ref().update(updates).then(() => { setSaveState('saved'); return true; }, err => { setSaveState('error'); alert('Gagal simpan: ' + err.message); return false; });
       });
+    }
+    function saveNow() {
+      setSaveState('saving');
+      saveToStorage().then(ok => { if (ok) setSaveState('saved'); else setSaveState('error'); });
     }
     function afterDefectChange() { saveToStorage(); renderRoom(true); }
 
@@ -367,14 +371,16 @@
           <h1 class="room-title">${escapeHTML(label)}</h1>
           <div class="room-res">${resident ? '👤 ' + escapeHTML(resident) + (door.jumlah ? ' • ' + escapeHTML(String(door.jumlah)) + ' orang' : '') : '🚪 Tiada penghuni direkod'}</div>
           <div class="room-flags">${flags}</div>
-          <div class="room-save" id="saveState">${escapeHTML(saveInfo)}</div>
+          <div class="room-save js-save-state" id="saveState">${escapeHTML(saveInfo)}</div>
         </div>
         <div class="door-card">${renderChecklistSection(item.id, di, door, 'checklist', 'checklist-title', 'Rekod Kelengkapan & Penggantian:', ITEMS_CHECKLIST)}</div>
         <div class="door-card">${renderChecklistSection(item.id, di, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}</div>
         <div class="door-card room-send">
+          <button class="btn-save" type="button" onclick="saveNow()">💾 Simpan</button>
+          <div class="room-save js-save-state" style="margin:6px 0 10px;">${escapeHTML(saveInfo)}</div>
           <button class="btn-wa" type="button" onclick="sendRoomWhatsApp()">💬 Hantar rekod ke WhatsApp</button>
           ${navigator.share ? '<button class="btn-share" type="button" onclick="shareRoomWithPhotos()">📤 Kongsi dengan gambar</button>' : ''}
-          <div class="room-hint">Rekod disimpan automatik. Butang hijau menghantar ringkasan dengan pautan gambar. "Kongsi dengan gambar" melampirkan gambar sebenar: pilih WhatsApp, kemudian penerima.</div>
+          <div class="room-hint">Rekod disimpan automatik; tekan Simpan untuk pastikan. Butang hijau menghantar ringkasan dengan pautan gambar. "Kongsi dengan gambar" melampirkan gambar sebenar: pilih WhatsApp, kemudian penerima.</div>
         </div>`;
       loadMissingPhotos();
     }
