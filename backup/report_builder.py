@@ -114,7 +114,30 @@ def make_xlsx(data, month):
     from openpyxl.utils import get_column_letter
     c = collect(data, month)
     wb = Workbook(); wb.remove(wb.active)
-    sheets = [('Ringkasan', H_SUM, summary_rows(c['summary'])), ('Kelengkapan', H_KEL, c['kel']),
+    H_BRG = ['Layout', 'Barang', 'Direkod', 'Baik', 'Rosak', 'Perlu diganti', 'Perlu tindakan']
+    H_BLD = ['Layout', 'Bangunan', 'Barang', 'Direkod', 'Baik', 'Rosak', 'Perlu diganti', 'Perlu tindakan']
+    from collections import defaultdict
+    by_item = defaultdict(lambda: [0, 0, 0, 0]); by_bld = defaultdict(lambda: [0, 0, 0, 0])
+    inv = {v: k for k, v in KEADAAN.items()}
+    for lay, bld, _d, _n, barang, keadaan, _t in c['kel']:
+        i = {'baik': 1, 'rosak': 2, 'ganti': 3}[inv[keadaan]]
+        for tbl, key in ((by_item, (lay, barang)), (by_bld, (lay, bld, barang))):
+            tbl[key][0] += 1; tbl[key][i] += 1
+    labels = [l for _, l in ITEMS]
+    brg_rows, bld_rows = [], []
+    for s_ in c['summary']:
+        lay = s_['layout']; tot = [0, 0, 0, 0]
+        for l in labels:
+            v = by_item[(lay, l)]; tot = [a + b for a, b in zip(tot, v)]
+            brg_rows.append([lay, l, v[0], v[1], v[2], v[3], v[2] + v[3]])
+        brg_rows.append([lay, 'JUMLAH', tot[0], tot[1], tot[2], tot[3], tot[2] + tot[3]])
+        blds = sorted({k[1] for k in by_bld if k[0] == lay}, key=natural)
+        for b in blds:
+            for l in labels:
+                v = by_bld.get((lay, b, l))
+                if v: bld_rows.append([lay, b, l, v[0], v[1], v[2], v[3], v[2] + v[3]])
+    sheets = [('Ringkasan', H_SUM, summary_rows(c['summary'])), ('Ringkasan barang', H_BRG, brg_rows),
+              ('Barang ikut bangunan', H_BLD, bld_rows), ('Kelengkapan', H_KEL, c['kel']),
               ('Kerosakan semasa', H_KER, c['ker']), ('Rekod kerosakan', H_KER, c['rec'])]
     for title, head, rows in sheets:
         ws = wb.create_sheet(title)
@@ -123,7 +146,10 @@ def make_xlsx(data, month):
         for cell in ws[2]:
             cell.font = Font(bold=True, color='FFFFFF'); cell.fill = PatternFill('solid', fgColor='0B2447')
             cell.alignment = Alignment(wrap_text=True, vertical='center')
-        for r in rows: ws.append(r)
+        for r in rows:
+            ws.append(r)
+            if len(r) > 1 and r[1] == 'JUMLAH':
+                for cell in ws[ws.max_row]: cell.font = Font(bold=True)
         if not rows: ws.append(['Tiada rekod'])
         ws.freeze_panes = 'A3'
         for i in range(1, len(head) + 1):

@@ -88,6 +88,12 @@ try:
 except ImportError:
     ok(pdf.count(b'/Subtype /Image') >= 2, 'the PDF contains the pictures')
 
+from openpyxl import load_workbook
+wb = load_workbook(_io.BytesIO(state['uploaded']['Laporan-2026-10.xlsx']))
+ok(wb.sheetnames == ['Ringkasan', 'Ringkasan barang', 'Barang ikut bangunan', 'Kelengkapan', 'Kerosakan semasa', 'Rekod kerosakan'], 'Excel sheets: ' + ', '.join(wb.sheetnames))
+rows = {(r[1]): r for r in wb['Ringkasan barang'].iter_rows(min_row=3, values_only=True)}
+ok(rows['Almari'][2:] == (1, 0, 1, 0, 1) and rows['Dapur Gas'][2:] == (0, 0, 0, 0, 0) and rows['JUMLAH'][2:] == (1, 0, 1, 0, 1), 'Ringkasan barang: Almari 1 rosak, Dapur Gas 0, total row')
+
 # 3. Drive fails: nothing cleared
 for mode in ('fail', 'short'):
     state.clear(); state['script_mode'] = mode; code, out, _ = run('--month', '2026-10', '--clear')
