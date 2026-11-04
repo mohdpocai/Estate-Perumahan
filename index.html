@@ -31,7 +31,10 @@ button,input,select{font-family:inherit}
 .view-tab{border:0;background:transparent;color:#B8C4D6;padding:7px 14px;border-radius:7px;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px}
 .view-tab.active{background:#fff;color:var(--nav)}
 .tab-count{background:var(--bad);color:#fff;border-radius:99px;font-size:10px;padding:1px 6px;display:none}
-#headerSearch{flex:1;min-width:120px;padding:8px 12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px}
+.search-row{flex:1;min-width:120px;display:flex;align-items:center;gap:8px}
+#mapHeaderBtns{gap:6px;flex-shrink:0}
+#mapHeaderBtns .icon-btn.locked{background:var(--bad)}
+#headerSearch{flex:1;min-width:0;padding:8px 12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px}
 #headerSearch::placeholder{color:#94A3B8}
 #syncStatus{font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0}
 .menu-wrap{position:relative;flex-shrink:0}
@@ -170,7 +173,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .loc-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 16px;border-top:1px solid var(--line);font-size:13px;cursor:pointer}
 .loc-row:hover{background:var(--bg)}.loc-row small{color:var(--mut)}
 @media(max-width:760px){.sum-row.four{grid-template-columns:1fr 1fr}}
-@media(max-width:760px){.brand-text{display:none}#app-header{flex-wrap:wrap;padding:10px 12px}#headerSearch{order:9;flex-basis:100%}.view-tab{padding:7px 10px}.def-fields,.sum-row{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.brand-text{display:none}#app-header{flex-wrap:wrap;padding:10px 12px}#headerSearch{order:0}.search-row{order:9;flex-basis:100%}.view-tab{padding:7px 10px}.def-fields,.sum-row{grid-template-columns:1fr 1fr}}
 /* header page dropdown */
 .nav-dd{position:relative;flex-shrink:0}
 .nav-dd-btn{background:#fff;color:var(--nav);border:0;border-radius:9px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:inherit}
@@ -306,15 +309,19 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
           <button onclick="location.href='ringkasan.html'">📊 Ringkasan</button>
         </div>
       </div>
-      <input type="text" id="headerSearch" placeholder="Cari pekerja, bangunan atau kerosakan..." oninput="onSearchInput()">
+      <div class="search-row">
+        <input type="text" id="headerSearch" placeholder="Cari pekerja, bangunan atau kerosakan..." oninput="onSearchInput()">
+        <div id="mapHeaderBtns" style="display:none">
+          <button class="icon-btn" type="button" onclick="resetView()" title="Reset paparan pelan">🎯</button>
+          <button class="icon-btn" type="button" id="btnLock" onclick="toggleLockLayout()" title="Layout Bebas">🔓</button>
+        </div>
+      </div>
       <span id="syncStatus">...</span>
       <div class="menu-wrap">
         <button class="icon-btn" onclick="toggleMenu(event)" title="Menu">⋯</button>
         <div class="menu" id="mainMenu">
           <div id="mapMenuItems" style="display:none">
-            <button onclick="resetView()">🎯 Reset paparan pelan</button>
             <button onclick="resetZoom()">🔍 Set semula zoom (<span id="zoomVal">100%</span>)</button>
-            <button id="btnLock" onclick="toggleLockLayout()">🔓 Layout Bebas</button>
             <hr>
           </div>
           <button onclick="exportPDF('all')">📄 Eksport Semua (PDF)</button>
@@ -530,6 +537,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       document.getElementById('navDdLabel').textContent = view === 'list' ? '📋 Senarai' : '🗺️ Pelan';
       document.getElementById('navDdMenu').classList.remove('open');
       document.getElementById('mapMenuItems').style.display = view === 'map' ? 'block' : 'none';
+      document.getElementById('mapHeaderBtns').style.display = view === 'map' ? 'flex' : 'none';
       document.getElementById('tabMap').classList.toggle('active', view === 'map');
       renderAll();
     }
@@ -1154,10 +1162,12 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
     /* ===================== MAP VIEW ===================== */
     function updateLockUI() {
       if (isLayoutLocked) {
-        btnLock.innerHTML = '🔒 Layout Terkunci';
+        btnLock.textContent = '🔒';
+        btnLock.title = 'Layout Terkunci (tekan untuk bebaskan)';
         btnLock.classList.add('locked');
       } else {
-        btnLock.innerHTML = '🔓 Layout Bebas';
+        btnLock.textContent = '🔓';
+        btnLock.title = 'Layout Bebas (tekan untuk kunci)';
         btnLock.classList.remove('locked');
       }
     }
