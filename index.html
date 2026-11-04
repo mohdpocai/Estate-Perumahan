@@ -1624,7 +1624,6 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
                   <label style="font-size:12px;">Pihak Bertindak / Kontraktor:</label>
                   <input type="text" value="${escapeHTML(itemData.pihak || '')}" maxlength="60" placeholder="Cth: Unit Penyelenggaraan" onchange="setDefectField('${itemId}', ${doorIndex}, '${chk.key}', 'pihak', this.value)">
                 </div>
-                ${evidenceBlock(itemId, doorIndex, chk.key, itemData)}
                 <div class="send-row">${sendButtons(`'one', '${itemId}', ${doorIndex}, '${chk.key}'`)}</div>
               ` : ''}
               ${!isDefect ? `<div class="form-group" style="margin:0;">
@@ -2333,7 +2332,6 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       const e = getChecklistEntry(id, di, 'defects', key, false);
       if (!e) return;
       if (status === 'selesai' && !doneDate) { openDoneDateModal(id, di, key); return; }   // ask for the date first
-      if (status === 'selesai' && !e.gambarTindakan && !confirm('Tiada gambar bukti tindakan. Tandakan selesai tanpa gambar?')) { afterDefectChange(id); return; }
       e.tindakan = status;
       e.catatanTindakan = AUTO_NOTE[status] || '';
       if (status === 'proses' && !e.tarikhTindakan) e.tarikhTindakan = todayStr();
