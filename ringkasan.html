@@ -61,7 +61,14 @@ const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
       return out;
     }
     let sumFilter = 'semua';
+    let sumSort = 'bangunan';
+    try { sumSort = localStorage.getItem('ringkasanSort_v1') || 'bangunan'; } catch (e) {}
     function setSumFilter(f) { sumFilter = (sumFilter === f ? 'semua' : f); renderSummary(); }
+    function setSumSort(k) { sumSort = k; try { localStorage.setItem('ringkasanSort_v1', k); } catch (e) {} renderSummary(); }
+    const nat = (a, b) => String(a || '').localeCompare(String(b || ''), 'ms', { numeric: true, sensitivity: 'base' });
+    const placeName = r => (r.item.name || 'Rumah');
+    const doorName = r => (r.door.label && r.door.label.trim()) || ('Pintu ' + (r.di + 1));
+    const byPlace = (x, y) => nat(placeName(x), placeName(y)) || (x.di - y.di);
     function renderSummary() {
       const q = searchQuery;
       const cond = r => r.e.keadaan || 'baik';
@@ -71,28 +78,59 @@ const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
       const n = k => bad.filter(r => cond(r) === k).length;
       const shown = bad.filter(r => sumFilter === 'semua' || cond(r) === sumFilter);
       const card = (k, v, l, c) => `<div class="sum-card ${sumFilter === k ? 'on' : ''}" onclick="setSumFilter('${k}')"><b style="color:${c}">${v}</b><span>${l}</span></div>`;
+      const chip = (k, l) => `<button type="button" onclick="setSumSort('${k}')" style="border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;${sumSort === k ? 'background:var(--nav);color:#fff;border-color:var(--nav);' : 'background:var(--sf);color:var(--ink);'}">${l}</button>`;
       let html = `<div class="sum-row">${card('semua', bad.length, 'Perlu tindakan', 'var(--ink)')}${card('rosak', n('rosak'), 'Rosak', 'var(--bad)')}${card('ganti', n('ganti'), 'Perlu diganti', 'var(--warn)')}</div>
-        <div class="def-meta" style="margin-top:-4px;">${recorded.length - bad.length} daripada ${recorded.length} barang direkod dalam keadaan baik</div>`;
+        <div class="def-meta" style="margin-top:-4px;">${recorded.length - bad.length} daripada ${recorded.length} barang direkod dalam keadaan baik</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;"><span class="def-meta" style="margin:0;">Susun ikut:</span>${chip('bangunan', 'Nama bangunan')}${chip('penghuni', 'Nama penghuni')}${chip('barang', 'Barang')}</div>`;
       if (!shown.length) html += `<div class="empty-state">${recorded.length ? 'Tiada barang rosak atau perlu diganti. 🎉' : 'Tiada rekod kelengkapan' + (q ? ' yang sepadan' : '') + '.'}</div>`;
       const order = { rosak: 0, ganti: 1 };
-      html += ITEMS_CHECKLIST.map(chk => {
-        const rows = shown.filter(r => r.chk.key === chk.key).sort((x, y) => order[cond(x)] - order[cond(y)]);
-        if (!rows.length) return '';
-        const g = rows.filter(r => cond(r) === 'ganti').length, r2 = rows.length - g;
-        return `<div class="sum-item">
-          <div style="padding:14px 16px;">
-            <div class="sum-head"><span>${chk.label}</span><span>${rows.length} unit</span></div>
-            <div class="sum-counts">${r2 ? r2 + ' rosak' : ''}${r2 && g ? ' • ' : ''}${g ? g + ' perlu diganti' : ''}</div>
-          </div>
-          ${rows.map(r => {
-            const c = cond(r);
-            return `<div class="loc-row" onclick="location.href='${MAIN_URL}?open=${encodeURIComponent(r.item.id)}'">
-              <div>${escapeHTML(r.item.name || 'Rumah')} • ${escapeHTML(r.door.label || 'Pintu ' + (r.di + 1))}<br><small>${r.door.nama ? escapeHTML(r.door.nama) + ' • ' : ''}Tarikh: ${r.e.tarikh || '-'}</small></div>
-              <span class="badge ${c === 'rosak' ? 'st-new' : 'st-prog'}">${COND[c]}</span>
-            </div>`;
-          }).join('')}
-        </div>`;
-      }).join('');
+      const badge = c => `<span class="badge ${c === 'rosak' ? 'st-new' : 'st-prog'}">${COND[c]}</span>`;
+      const itemOrder = (x, y) => ITEMS_CHECKLIST.findIndex(k => k.key === x.chk.key) - ITEMS_CHECKLIST.findIndex(k => k.key === y.chk.key);
+
+      if (sumSort === 'barang') {
+        html += [...ITEMS_CHECKLIST].sort((x, y) => nat(x.label, y.label)).map(chk => {
+          const rows = shown.filter(r => r.chk.key === chk.key).sort(byPlace);
+          if (!rows.length) return '';
+          const g = rows.filter(r => cond(r) === 'ganti').length, r2 = rows.length - g;
+          return `<div class="sum-item">
+            <div style="padding:14px 16px;">
+              <div class="sum-head"><span>${chk.label}</span><span>${rows.length} unit</span></div>
+              <div class="sum-counts">${r2 ? r2 + ' rosak' : ''}${r2 && g ? ' • ' : ''}${g ? g + ' perlu diganti' : ''}</div>
+            </div>
+            ${rows.map(r => `<div class="loc-row" onclick="location.href='${MAIN_URL}?open=${encodeURIComponent(r.item.id)}'">
+              <div>${escapeHTML(placeName(r))} • ${escapeHTML(doorName(r))}<br><small>${r.door.nama ? escapeHTML(r.door.nama) + ' • ' : ''}Tarikh: ${r.e.tarikh || '-'}</small></div>
+              ${badge(cond(r))}
+            </div>`).join('')}
+          </div>`;
+        }).join('');
+      } else {
+        /* one card per room, sorted A-Z by building name (or by resident name) */
+        const rooms = new Map();
+        shown.forEach(r => { const k = r.item.id + '|' + r.di; if (!rooms.has(k)) rooms.set(k, []); rooms.get(k).push(r); });
+        const list = [...rooms.values()].sort((A, B) => sumSort === 'penghuni'
+          ? ((A[0].door.nama ? 0 : 1) - (B[0].door.nama ? 0 : 1)) || nat(A[0].door.nama, B[0].door.nama) || byPlace(A[0], B[0])
+          : byPlace(A[0], B[0]));
+        html += list.map(rs => {
+          const r0 = rs[0];
+          const g = rs.filter(r => cond(r) === 'ganti').length, r2 = rs.length - g;
+          const title = sumSort === 'penghuni'
+            ? `${r0.door.nama ? escapeHTML(r0.door.nama) : '<i>Tiada penghuni</i>'}`
+            : `${escapeHTML(placeName(r0))} • ${escapeHTML(doorName(r0))}`;
+          const sub = sumSort === 'penghuni'
+            ? `${escapeHTML(placeName(r0))} • ${escapeHTML(doorName(r0))}`
+            : (r0.door.nama ? escapeHTML(r0.door.nama) : 'Tiada penghuni');
+          return `<div class="sum-item">
+            <div style="padding:14px 16px;cursor:pointer;" onclick="location.href='${MAIN_URL}?open=${encodeURIComponent(r0.item.id)}'">
+              <div class="sum-head"><span>${title}</span><span>${rs.length} barang</span></div>
+              <div class="sum-counts">${sub} • ${r2 ? r2 + ' rosak' : ''}${r2 && g ? ' • ' : ''}${g ? g + ' perlu diganti' : ''}</div>
+            </div>
+            ${rs.sort((x, y) => order[cond(x)] - order[cond(y)] || itemOrder(x, y)).map(r => `<div class="loc-row">
+              <div>${escapeHTML(r.chk.label)}<br><small>Tarikh: ${r.e.tarikh || '-'}</small></div>
+              ${badge(cond(r))}
+            </div>`).join('')}
+          </div>`;
+        }).join('');
+      }
       document.getElementById('summaryScroll').innerHTML = html;
     }
 
