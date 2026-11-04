@@ -7,11 +7,12 @@ Host it with GitHub Pages: Settings → Pages → `main` / root.
 
 | File | What it is |
 |---|---|
-| `index.html` | Main app: **Senarai** (list) and **Pelan** (map). Building details, doors, checklists, defect ticking, WhatsApp/Emel/Kongsi report buttons. |
+| `index.html` | Main app: **Senarai** (list) and **Pelan** (map). Building details, doors, checklists, defect ticking, one **Hantar rekod bilik ini ke WhatsApp** button per room (no buttons on individual checklist rows), and a building-level defect report. |
 | `kerosakan.html` | **Kerosakan**: all defect records, status actions (Mula Tindakan / Selesai), contractor, notes, evidence photos, **Padam rekod**. |
 | `ringkasan.html` | **Ringkasan**: only items that are rosak or need replacing. |
 | `bilik.html` | **Rekod Bilik**: the page a room's QR code opens. Shows one room and its two forms: Rekod Kelengkapan and Senarai Semak Kerosakan. |
 | `gambar.html` | Read-only photo viewer opened from the picture links in the WhatsApp report. |
+| `config.js` | `WA_NUMBER` and the room report text (shared by `index.html` and `bilik.html`). |
 | `qrcode.js` | QR generator (MIT, Kazuhiko Arase). Runs in the browser, no internet needed. |
 | `shared.js` / `shared.css` | Code and styles used by `kerosakan.html`, `ringkasan.html` and `bilik.html` (Firebase, login, layouts, photos, defect records). |
 
@@ -26,7 +27,7 @@ Open a building (Senarai or Pelan) → go to a door → **📱 Kod QR bilik ini*
 - Link format: `bilik.html?l=<layoutId>&b=<buildingId>&d=<door number, from 0>`. It uses the address the main app was opened on, so open the app from the GitHub Pages address before printing.
 - **No login on the QR page.** It signs in anonymously (Firebase Anonymous sign-in) and shows only that one room: Rekod Kelengkapan and Senarai Semak Kerosakan, plus **Hantar rekod ke WhatsApp**. There are no links, no menu and no logout, so there is nowhere else to go.
 - Anonymous sessions are refused by `index.html`, `kerosakan.html` and `ringkasan.html` (they sign it out and show the login window), so a QR session can never open the main app.
-- **WhatsApp number**: set `WA_NUMBER` near the top of the script in `bilik.html` (e.g. `'0123456789'` or `'60123456789'`). Empty = the person chooses the recipient. WhatsApp links cannot attach pictures, so the message carries a link per photo (`gambar.html?p=<photoId>`, a read-only page that opens without login), and a **Kongsi dengan gambar** button (phones) attaches the real pictures through the share sheet (the person then picks WhatsApp and the recipient). Anonymous access to `photos/<id>` is already covered by `firebase-rules.json`.
+- **WhatsApp number**: set `WA_NUMBER` once in `config.js` (used by both the QR page and the main app) (e.g. `'0123456789'` or `'60123456789'`). Empty = the person chooses the recipient. WhatsApp links cannot attach pictures, so the message carries a link per photo (`gambar.html?p=<photoId>`, a read-only page that opens without login), and a **Kongsi dengan gambar** button (phones) attaches the real pictures through the share sheet (the person then picks WhatsApp and the recipient). Anonymous access to `photos/<id>` is already covered by `firebase-rules.json`.
 - The room page saves **only that room** (`layouts/<l>/elements/<b>/doors/<d>`) and its defect records, so people filling different rooms of one building never overwrite each other. Selesai dates, photos and the Padam/Buka Semula rules behave exactly as in the main app.
 - The door is identified by its position. If the last door of a building is removed and a new one added, the old sticker opens the new door. Removed rooms/buildings/layouts show a clear message.
 

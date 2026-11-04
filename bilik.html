@@ -68,6 +68,7 @@
   </div>
 
   <script src="shared.js?v=5"></script>
+  <script src="config.js?v=1"></script>
   <script>
     /* ===== which room this page is for (from the QR code) ===== */
     const QS = new URLSearchParams(location.search);
@@ -75,9 +76,6 @@
     const Q_BUILDING = QS.get('b') || '';
     const Q_DOOR = /^\d+$/.test(QS.get('d') || '') ? parseInt(QS.get('d'), 10) : -1;
     currentLayoutId = Q_LAYOUT;                        // this page never touches the layout remembered by the main app
-
-    /* Nombor WhatsApp penyelia (dengan kod negara, cth 60123456789 atau 0123456789). Kosongkan = pilih penerima sendiri. */
-    const WA_NUMBER = '';
 
     const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
 
@@ -383,45 +381,15 @@
     document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender) renderRoom(false); }, 0));
 
     /* ===================== WHATSAPP ===================== */
-    function waNumber() {
-      let n = String(WA_NUMBER || '').replace(/\D/g, '');
-      if (n.startsWith('0')) n = '60' + n.slice(1);
-      return n;
-    }
     function roomReport() {
       const c = roomCtx();
-      if (!c) return null;
-      const { item, door, di } = c;
-      const label = door.label && door.label.trim() ? door.label.trim() : 'Pintu ' + (di + 1);
-      const who = door.nama && door.nama.trim() ? ' (' + door.nama.trim() + (door.jumlah ? ', ' + door.jumlah + ' orang' : '') + ')' : '';
-      const KEADAAN = { baik: 'Baik', ganti: 'Perlu Diganti', rosak: 'Rosak' };
-      const photoIds = [];
-      const pics = e => [e.gambar, e.gambarTindakan].filter(g => g && !String(g).startsWith('data:')).map(g => {
-        photoIds.push(g);
-        return '\n   📷 ' + new URL('gambar.html?p=' + encodeURIComponent(g), location.href).href;
-      }).join('');
-      const kel = ITEMS_CHECKLIST.filter(k => door.checklist[k.key] && door.checklist[k.key].status).map(k => {
-        const e = door.checklist[k.key];
-        return '• ' + k.label + ' - ' + (KEADAAN[e.keadaan || 'baik'] || 'Baik') + (e.tarikh ? ' (' + e.tarikh + ')' : '') + pics(e);
-      });
-      const ker = DEFECT_CHECKLIST.filter(k => door.defects[k.key] && door.defects[k.key].status).map(k => {
-        const e = door.defects[k.key];
-        return '• ' + k.label + ' - ' + DEF_STATUS[defStatus(e)].l + (e.tarikh ? ' (' + e.tarikh + ')' : '') +
-          (e.catatan ? '\n   Catatan: ' + e.catatan : '') + (e.pihak ? '\n   Pihak bertindak: ' + e.pihak : '') + pics(e);
-      });
-      const text = ['*LAPORAN BILIK* - ' + (layouts[Q_LAYOUT] || ''),
-        '📍 *' + (item.name || 'Bangunan') + ' • ' + label + '*' + who,
-        '📅 ' + todayStr(), '',
-        '🛏️ *Rekod Kelengkapan*', kel.length ? kel.join('\n') : 'Tiada barang direkod', '',
-        '⚠️ *Senarai Semak Kerosakan*', ker.length ? ker.join('\n') : 'Tiada kerosakan'].join('\n');
-      return { text, count: kel.length + ker.length, photoIds };
+      return c ? buildRoomReport(c.item, c.door, c.di, layouts[Q_LAYOUT] || '') : null;
     }
     function sendRoomWhatsApp() {
       const r = roomReport();
       if (!r) return;
       if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
-      const n = waNumber();
-      window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(r.text.slice(0, 3500)), '_blank');
+      openWhatsApp(r.text);
     }
     /* share with the real pictures attached (phone share sheet: choose WhatsApp, then the contact) */
     async function photoFile(g, i) {

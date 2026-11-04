@@ -13,6 +13,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
   <!-- QR code generator (MIT, bundled in this repo) -->
   <script src="qrcode.js?v=1"></script>
+  <script src="config.js?v=1"></script>
 
   <style>
 :root{--bg:#F3F5F9;--sf:#fff;--line:#E3E8EF;--ink:#0F172A;--mut:#64748B;--nav:#0B2545;--brand:#1D6FB8;--ok:#15803D;--warn:#B45309;--bad:#DC2626;--r:10px}
@@ -1627,7 +1628,6 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
                   <label style="font-size:12px;">Pihak Bertindak / Kontraktor:</label>
                   <input type="text" value="${escapeHTML(itemData.pihak || '')}" maxlength="60" placeholder="Cth: Unit Penyelenggaraan" onchange="setDefectField('${itemId}', ${doorIndex}, '${chk.key}', 'pihak', this.value)">
                 </div>
-                <div class="send-row">${sendButtons(`'one', '${itemId}', ${doorIndex}, '${chk.key}'`)}</div>
               ` : ''}
               ${!isDefect ? `<div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Keadaan Barang:</label>
@@ -1765,6 +1765,15 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 
     let detailPage = 0, detailPageItemId = null;
 
+    function sendRoomReport(id, di) {
+      const item = elements.find(e => e.id === id);
+      const door = item && item.doors && item.doors[di];
+      if (!door) return;
+      const r = buildRoomReport(item, door, di, currentLayoutName());
+      if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
+      openWhatsApp(r.text);
+    }
+
     function renderDoorCard(item, index) {
       const door = item.doors[index];
       if (!door.checklist) door.checklist = {};
@@ -1785,6 +1794,10 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
           </div>
           ${renderChecklistSection(item.id, index, door, 'checklist', 'checklist-title', 'Rekod Kelengkapan & Penggantian:', ITEMS_CHECKLIST)}
           ${renderChecklistSection(item.id, index, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}
+          <div class="send-card" style="margin:14px 0 0;text-align:center;">
+            <button class="btn-send wa" type="button" style="width:100%;padding:12px;font-size:15px;" onclick="sendRoomReport('${item.id}', ${index})">💬 Hantar rekod bilik ini ke WhatsApp</button>
+            <div class="card-sub" style="margin-top:6px;">Tekan selepas semua senarai semak siap diisi.</div>
+          </div>
         </div>
       `;
     }
