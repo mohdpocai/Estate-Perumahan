@@ -1793,11 +1793,13 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
             <input type="number" min="0" max="20" value="${door.jumlah || '1'}" onchange="updateDoorData('${item.id}', ${index}, 'jumlah', this.value)">
           </div>
           ${renderChecklistSection(item.id, index, door, 'checklist', 'checklist-title', 'Rekod Kelengkapan & Penggantian:', ITEMS_CHECKLIST)}
+        </div>
+        <div class="door-card">
           ${renderChecklistSection(item.id, index, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}
-          <div class="send-card" style="margin:14px 0 0;text-align:center;">
-            <button class="btn-send wa" type="button" style="width:100%;padding:12px;font-size:15px;" onclick="sendRoomReport('${item.id}', ${index})">💬 Hantar rekod bilik ini ke WhatsApp</button>
-            <div class="card-sub" style="margin-top:6px;">Tekan selepas semua senarai semak siap diisi.</div>
-          </div>
+        </div>
+        <div class="door-card" style="text-align:center;">
+          <button class="btn-send wa" type="button" style="width:100%;padding:14px;font-size:16px;font-weight:700;" onclick="sendRoomReport('${item.id}', ${index})">💬 Hantar rekod bilik ini ke WhatsApp</button>
+          <div class="card-sub" style="margin-top:8px;">Rekod disimpan automatik. Tekan butang ini selepas semua senarai semak siap diisi.</div>
         </div>
       `;
     }
