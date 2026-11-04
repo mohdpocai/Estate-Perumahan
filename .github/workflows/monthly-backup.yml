@@ -1,0 +1,56 @@
+name: Laporan bulanan
+
+on:
+  schedule:
+    - cron: '10 16 * * *'        # setiap hari 16:10 UTC = 00:10 waktu Malaysia; skrip hanya bertindak pada 1hb
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Bulan laporan YYYY-MM (kosong = bulan lepas)'
+        required: false
+      clear:
+        description: 'Kosongkan senarai semak selepas sandaran disahkan?'
+        type: boolean
+        default: false
+      force:
+        description: 'Paksa walaupun bukan 1hb / sudah dibuat'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get install -y fonts-dejavu-core
+      - run: pip install openpyxl reportlab requests
+      - name: Jana laporan, simpan ke Google Drive
+        working-directory: backup
+        env:
+          BACKUP_EMAIL: ${{ secrets.BACKUP_EMAIL }}
+          BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+          APPS_SCRIPT_TOKEN: ${{ secrets.APPS_SCRIPT_TOKEN }}
+          MONTH: ${{ inputs.month }}
+          FORCE: ${{ inputs.force }}
+          CLEAR: ${{ github.event_name == 'workflow_dispatch' && inputs.clear || vars.CLEAR_AFTER_BACKUP }}
+        run: |
+          args="--out out"
+          [ -n "$MONTH" ] && args="$args --month $MONTH"
+          [ "$FORCE" = "true" ] && args="$args --force"
+          [ "$CLEAR" = "true" ] && args="$args --clear"
+          python monthly_backup.py $args
+      - name: Simpan salinan dalam GitHub (peribadi, 90 hari)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laporan-bulanan
+          path: backup/out/
+          if-no-files-found: ignore
+          retention-days: 90
