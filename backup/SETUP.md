@@ -36,6 +36,8 @@ Untuk mematikan semula, padam pembolehubah itu atau tukar kepada `false`.
 
 ## Perkara yang perlu diketahui
 - Jika sesuatu gagal, GitHub menghantar emel "workflow failed" kepada pemilik repo dan **data tidak dikosongkan**. Jalankan semula dari tab Actions (*force* jika perlu).
-- Gambar tidak dimasukkan dalam Excel/PDF (hanya data). Gambar kekal dalam Firebase.
+- **PDF** mengandungi semua data dan gambar: ringkasan, senarai semua penghuni, rekod setiap bilik (kelengkapan dan kerosakan) dan rekod kerosakan kekal, dengan gambar bukti dimampatkan. **Excel** mengandungi data dalam bentuk jadual (tanpa gambar).
+- Gambar sentiasa kekal dalam Firebase juga. Jika PDF terlalu besar (banyak gambar), ia masih boleh disimpan dalam Drive; had muat naik Apps Script lebih kurang 50 MB.
 - GitHub memberhentikan jadual automatik jika repo tiada aktiviti 60 hari. Jika itu berlaku, hidupkan semula di tab Actions.
+- Jika ada gambar yang tidak dapat dimasukkan dalam PDF, laporan tetap disimpan tetapi **pengosongan dihentikan** dan anda diemail. Untuk mengosongkan juga, tambah pembolehubah `ALLOW_MISSING_PHOTOS` = `true`.
 - Uji tempatan: `python backup/test_backup.py`.

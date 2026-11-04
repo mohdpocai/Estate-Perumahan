@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from report_builder import make_xlsx, make_pdf, month_label
+from report_builder import make_xlsx, make_pdf, month_label, photo_ids
 from clear_plan import plan_clear
 
 API_KEY = os.environ.get('FIREBASE_API_KEY', 'AIzaSyCmc1cccrzh29H6SzWPt84a8rK1x747jU8')
@@ -60,6 +60,7 @@ def main():
     ap.add_argument('--month', help='YYYY-MM (default: previous month)')
     ap.add_argument('--force', action='store_true', help='run even if it is not the 1st / already done')
     ap.add_argument('--clear', action='store_true', help='clear the senarai semak after a verified backup')
+    ap.add_argument('--allow-missing-photos', action='store_true', help='clear even if some pictures could not be put in the PDF')
     ap.add_argument('--out', default='backup/out', help='folder for the generated files')
     ap.add_argument('--data-file', help='test only: read this JSON instead of Firebase (never uploads or clears)')
     a = ap.parse_args()
@@ -80,7 +81,18 @@ def main():
         data = {'layoutNames': fb('GET', 'layoutNames', token) or {}, 'layouts': fb('GET', 'layouts', token) or {}}
 
     xlsx, rows = make_xlsx(data, month)
-    pdf = make_pdf(data, month, rows)
+    photos = {}
+    if a.data_file:
+        photos = data.get('photos') or {}
+    else:
+        for pid in sorted(photo_ids(data)):                  # pictures referenced by the data (rooms + defect records)
+            try:
+                v = fb('GET', f'photos/{pid}', token)
+                if v: photos[pid] = v
+            except SystemExit:
+                print('  gambar tidak dapat dibaca:', pid)
+    pdf = make_pdf(data, month, rows, photos)
+    print(f'Gambar dalam PDF: {make_pdf.stats["shown"]} (tiada/rosak: {make_pdf.stats["missing"]}). Saiz PDF: {len(pdf) // 1024} KB.')
     os.makedirs(a.out, exist_ok=True)
     files = [(f'Laporan-{month}.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xlsx),
              (f'Laporan-{month}.pdf', 'application/pdf', pdf)]
@@ -95,6 +107,9 @@ def main():
 
     if not a.clear:
         print('Pengosongan TIDAK dihidupkan: data tidak diubah.'); return
+    if make_pdf.stats['missing'] and not a.allow_missing_photos:
+        sys.exit(f'{make_pdf.stats["missing"]} gambar tidak dapat dimasukkan dalam PDF. Laporan sudah disimpan tetapi data TIDAK dikosongkan. '
+                 'Semak gambar atau jalankan semula dengan ALLOW_MISSING_PHOTOS=true.')
     plan = plan_clear(data['layouts'])
     print(f'Mengosongkan senarai semak: {len(plan)} entri.')
     if plan:

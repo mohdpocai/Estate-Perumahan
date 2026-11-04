@@ -13,7 +13,12 @@ DATA = {'layoutNames': {'lp2': 'LP2'}, 'layouts': {'lp2': {'elements': {
          'defects': {'bumbungBocor': {'status': True, 'tindakan': 'proses', 'tarikh': '2026-10-05'},
                      'paipRosak': {'status': False, 'tindakan': 'selesai', 'tarikh': '2026-10-01', 'tarikhSelesai': '2026-10-09'}}},
         {'nama': '', 'checklist': {}, 'defects': {}}]}},
-    'defectLog': {}}}}
+    'defectLog': {'Lx': {'label': 'Bumbung Bocor', 'building': 'Blok A', 'door': 'Pintu 1', 'tarikh': '2026-10-05', 'tindakan': 'proses', 'gambar': 'p2'}}}}}
+import io as _io
+from PIL import Image as _I
+_b = _io.BytesIO(); _I.new('RGB', (800, 600), (200, 50, 50)).save(_b, 'JPEG')
+PHOTOS = {'p1': 'data:image/jpeg;base64,' + base64.b64encode(_b.getvalue()).decode(), 'p2': 'data:image/jpeg;base64,' + base64.b64encode(_b.getvalue()).decode()}
+DATA['layouts']['lp2']['elements']['e_1']['doors'][0]['checklist']['almari']['gambar'] = 'p1'
 state = {}
 
 
@@ -35,6 +40,7 @@ class H(BaseHTTPRequestHandler):
         p = self.path.split('?')[0]
         if p == '/layoutNames.json': return self.send(DATA['layoutNames'])
         if p == '/layouts.json': return self.send(DATA['layouts'])
+        if p.startswith('/photos/'): state.setdefault('photo_reads', []).append(p); return self.send(PHOTOS.get(p.split('/')[-1][:-5]))
         if p.startswith('/backups/'): return self.send(state.get('marker'))
         self.send(None, 404)
     def do_PATCH(self): state['patch'] = self.body(); self.send({})
@@ -70,10 +76,30 @@ ok(code == 0 and set(state['uploaded']) == {'Laporan-2026-10.xlsx', 'Laporan-202
 ok(state['uploaded']['Laporan-2026-10.pdf'][:4] == b'%PDF' and state['uploaded']['Laporan-2026-10.xlsx'][:2] == b'PK', 'files are a real PDF and a real xlsx')
 ok('patch' not in state and 'marker' not in state and 'TIDAK dihidupkan' in out, 'clear off: database untouched, no marker')
 
+import re
+pdf = state['uploaded']['Laporan-2026-10.pdf']
+ok(sorted(state['photo_reads']) == ['/photos/p1.json', '/photos/p2.json'], 'the script downloaded the pictures used by the data: ' + ','.join(state['photo_reads']))
+try:
+    from pypdf import PdfReader
+    n = sum(len(pg.images) for pg in PdfReader(_io.BytesIO(pdf)).pages)
+    ok(n == 2, f'the PDF contains the 2 pictures ({n} found)')
+    txt = ' '.join(pg.extract_text() for pg in PdfReader(_io.BytesIO(pdf)).pages)
+    ok('Senarai penghuni' in txt and 'Ali' in txt and 'Rekod kerosakan kekal' in txt, 'the PDF has the resident list, room records and permanent defect records')
+except ImportError:
+    ok(pdf.count(b'/Subtype /Image') >= 2, 'the PDF contains the pictures')
+
 # 3. Drive fails: nothing cleared
 for mode in ('fail', 'short'):
     state.clear(); state['script_mode'] = mode; code, out, _ = run('--month', '2026-10', '--clear')
     ok(code != 0 and 'patch' not in state and 'marker' not in state, f'Drive "{mode}": exit with error, NOTHING cleared')
+
+# 3b. a picture that cannot be read: report saved, but nothing cleared
+saved_photos = dict(PHOTOS); PHOTOS.pop('p1')
+state.clear(); code, out, _ = run('--month', '2026-10', '--clear')
+ok(code != 0 and 'patch' not in state and 'marker' not in state and 'uploaded' in state, 'missing picture: report uploaded, NOTHING cleared, exit with error')
+state.clear(); code, out, _ = run('--month', '2026-10', '--clear', '--allow-missing-photos')
+ok(code == 0 and 'patch' in state, '--allow-missing-photos overrides it')
+PHOTOS.update(saved_photos)
 
 # 4. normal run with clear
 state.clear(); code, out, _ = run('--month', '2026-10', '--clear')

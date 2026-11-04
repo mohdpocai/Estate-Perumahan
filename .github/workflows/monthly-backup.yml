@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: sudo apt-get install -y fonts-dejavu-core
-      - run: pip install openpyxl reportlab requests
+      - run: pip install openpyxl reportlab requests pillow
       - name: Jana laporan, simpan ke Google Drive
         working-directory: backup
         env:
@@ -39,12 +39,14 @@ jobs:
           APPS_SCRIPT_TOKEN: ${{ secrets.APPS_SCRIPT_TOKEN }}
           MONTH: ${{ inputs.month }}
           FORCE: ${{ inputs.force }}
+          ALLOW_MISSING_PHOTOS: ${{ vars.ALLOW_MISSING_PHOTOS }}
           CLEAR: ${{ github.event_name == 'workflow_dispatch' && inputs.clear || vars.CLEAR_AFTER_BACKUP }}
         run: |
           args="--out out"
           [ -n "$MONTH" ] && args="$args --month $MONTH"
           [ "$FORCE" = "true" ] && args="$args --force"
           [ "$CLEAR" = "true" ] && args="$args --clear"
+          [ "$ALLOW_MISSING_PHOTOS" = "true" ] && args="$args --allow-missing-photos"
           python monthly_backup.py $args
       - name: Simpan salinan dalam GitHub (peribadi, 90 hari)
         if: always()

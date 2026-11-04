@@ -134,16 +134,56 @@ def make_xlsx(data, month):
     return buf.getvalue(), c
 
 
-def make_pdf(data, month, c=None):
+def photo_ids(data):
+    """Every photo id referenced by the data (rooms and defect records)."""
+    ids = set()
+    def add(e):
+        for k in ('gambar', 'gambarTindakan'):
+            g = (e or {}).get(k)
+            if g and not str(g).startswith('data:'): ids.add(g)
+    for layout in (data.get('layouts') or {}).values():
+        for el in ((layout or {}).get('elements') or {}).values():
+            for d in as_list(el.get('doors')):
+                for e in list((d.get('checklist') or {}).values()) + list((d.get('defects') or {}).values()): add(e)
+            for e in (el.get('defects') or {}).values(): add(e)
+        for r in ((layout or {}).get('defectLog') or {}).values(): add(r)
+    return ids
+
+
+def rooms(data, month, rec_ids):
+    """Structured room records for the PDF: [(layout, building, door, nama, jumlah, kel[], ker[])]."""
+    names = data.get('layoutNames') or {}
+    out = []
+    for lid in sorted(data.get('layouts') or {}, key=lambda k: natural(names.get(k, k))):
+        lname = names.get(lid, lid)
+        for el in sorted(elements_of(data['layouts'][lid]), key=lambda e: natural(e.get('name') or '')):
+            bname = el.get('name') or CATEGORY.get(el.get('category'), 'Elemen')
+            if el.get('category') == 'pekerja':
+                for i, door in enumerate(as_list(el.get('doors'))):
+                    dname = (door.get('label') or '').strip() or f'Pintu {i + 1}'
+                    kel = [(label, door['checklist'][key]) for key, label in ITEMS if (door.get('checklist') or {}).get(key, {}).get('status')]
+                    ker = [(label, door['defects'][key]) for key, label in DEFECTS if (door.get('defects') or {}).get(key, {}).get('status')]
+                    out.append((lname, bname, dname, (door.get('nama') or '').strip(), door.get('jumlah') or '', kel, ker))
+            else:
+                lst = ROAD if el.get('category') == 'jalan' else DEFECTS
+                ker = [(label, el['defects'][key]) for key, label in lst if (el.get('defects') or {}).get(key, {}).get('status')]
+                if ker: out.append((lname, bname, '', '', '', [], ker))
+    return out
+
+
+def make_pdf(data, month, c=None, photos=None):
+    """Full backup PDF: summary, every resident, every room record, permanent defect records, all with pictures."""
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, Image, PageBreak
+    import base64, os
+    from PIL import Image as PILImage
+    photos = photos or {}
     c = c or collect(data, month)
-    import os
     base = '/usr/share/fonts/truetype/dejavu/'
     if os.path.exists(base + 'DejaVuSans.ttf'):
         pdfmetrics.registerFont(TTFont('F', base + 'DejaVuSans.ttf')); pdfmetrics.registerFont(TTFont('FB', base + 'DejaVuSans-Bold.ttf'))
@@ -151,33 +191,122 @@ def make_pdf(data, month, c=None):
     else:
         f, fb = 'Helvetica', 'Helvetica-Bold'
     st = ParagraphStyle('s', fontName=f, fontSize=8, leading=10)
+    sc = ParagraphStyle('c', fontName=f, fontSize=7, leading=9, textColor=colors.HexColor('#475569'))
     sh = ParagraphStyle('h', fontName=fb, fontSize=8, leading=10, textColor=colors.white)
     h1 = ParagraphStyle('t', fontName=fb, fontSize=16, leading=20, spaceAfter=6)
-    h2 = ParagraphStyle('t2', fontName=fb, fontSize=11, spaceBefore=10, spaceAfter=4)
+    h2 = ParagraphStyle('t2', fontName=fb, fontSize=11, leading=14, spaceBefore=12, spaceAfter=4)
+    h3 = ParagraphStyle('t3', fontName=fb, fontSize=9.5, leading=12, spaceBefore=8, spaceAfter=3, textColor=colors.HexColor('#0B2447'))
     note = ParagraphStyle('n', fontName=f, fontSize=8, textColor=colors.grey)
+    esc = lambda x: str(x if x is not None else '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    W = landscape(A4)[0] - 24 * mm
 
-    def table(head, rows, widths=None):
+    def table(head, rows, fr=None):
         if not rows: return Paragraph('Tiada rekod.', st)
-        data_ = [[Paragraph(str(x), sh) for x in head]] + [[Paragraph(str(x).replace('&', '&amp;').replace('<', '&lt;'), st) for x in r] for r in rows]
-        t = Table(data_, colWidths=widths, repeatRows=1)
+        d = [[Paragraph(esc(x), sh) for x in head]] + [[Paragraph(esc(x), st) for x in r] for r in rows]
+        t = Table(d, colWidths=[W * x for x in fr] if fr else None, repeatRows=1)
         t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0B2447')), ('GRID', (0, 0), (-1, -1), .25, colors.HexColor('#C7D2E0')),
                                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F3F6FA')]), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
         return t
 
+    stats = {'shown': 0, 'missing': 0}
+    cache = {}
+    def img(pid):
+        if pid in cache: return cache[pid]
+        uri = photos.get(pid)
+        if not uri:
+            cache[pid] = None; stats['missing'] += 1; return None
+        try:
+            raw = base64.b64decode(uri.split(',', 1)[1] if uri.startswith('data:') else uri)
+            im = PILImage.open(io.BytesIO(raw)).convert('RGB'); im.thumbnail((900, 900))
+            b = io.BytesIO(); im.save(b, 'JPEG', quality=72); b.seek(0)
+            w, h = im.size; k = min(62 * mm / w, 46 * mm / h)
+            cache[pid] = Image(b, width=w * k, height=h * k); stats['shown'] += 1
+        except Exception:
+            cache[pid] = None; stats['missing'] += 1
+        return cache[pid]
+
+    def gallery(items):
+        """items: [(caption, photo id)] -> table of pictures, 4 per row."""
+        cells = []
+        for cap, pid in items:
+            im = img(pid)
+            cells.append([im, Paragraph(esc(cap), sc)] if im else [Paragraph('(gambar tiada)', sc), Paragraph(esc(cap), sc)])
+        if not cells: return None
+        rows = []
+        for i in range(0, len(cells), 4):
+            chunk = cells[i:i + 4]
+            rows.append([x for x in chunk] + [''] * (4 - len(chunk)))
+        t = Table(rows, colWidths=[W / 4] * 4)
+        t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
+        return t
+
+    def pics_of(e, label):
+        out = []
+        if e.get('gambar'): out.append((label + ' - bukti', e['gambar']))
+        if e.get('gambarTindakan'): out.append((label + ' - bukti tindakan', e['gambarTindakan']))
+        return out
+
+    rec_ids = {r for r in (data_log_ids(data, month))}
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm,
                             title=f'Laporan Bulanan {month_label(month)}')
-    W = landscape(A4)[0] - 24 * mm
     el = [Paragraph(f'Laporan Bulanan - {month_label(month)}', h1),
-          Paragraph('Pengurusan Rumah Pekerja. Dijana ' + datetime.now().strftime('%d/%m/%Y %H:%M') + '. Fail Excel mengandungi data penuh.', note),
+          Paragraph('Pengurusan Rumah Pekerja. Sandaran penuh data dan gambar. Dijana ' + datetime.now().strftime('%d/%m/%Y %H:%M') + '.', note),
           Paragraph('Ringkasan', h2), table(H_SUM, summary_rows(c['summary']))]
-    bad = [r for r in c['kel'] if r[5] != 'Baik']
-    ok_n = len(c['kel']) - len(bad)
-    el += [Paragraph('Kelengkapan rosak / perlu diganti', h2), Paragraph(f'{ok_n} barang direkod dalam keadaan baik.', note),
-           table(H_KEL, bad, [W * x for x in (.1, .16, .14, .18, .16, .14, .12)])]
-    el += [Paragraph('Senarai semak kerosakan semasa', h2),
-           table(H_KER, c['ker'], [W * x for x in (.06, .1, .09, .1, .13, .08, .08, .18, .1, .08)])]
-    el += [Paragraph(f'Rekod kerosakan ({month_label(month)} dan yang belum selesai)', h2),
-           table(H_KER, c['rec'], [W * x for x in (.06, .1, .09, .1, .13, .08, .08, .18, .1, .08)])]
+
+    R = rooms(data, month, rec_ids)
+    res_rows = [[a, b, d, n or '-', j] for a, b, d, n, j, _, _ in R if d]
+    el += [Paragraph('Senarai penghuni (semua bilik)', h2), table(['Layout', 'Bangunan', 'Pintu / Bilik', 'Penghuni', 'Jumlah'], res_rows, (.15, .25, .2, .3, .1))]
+
+    el += [PageBreak(), Paragraph('Rekod bilik dan bangunan', h2)]
+    any_room = False
+    for lname, bname, dname, nama, jumlah, kel, ker in R:
+        if not kel and not ker: continue
+        any_room = True
+        title = f'{lname} • {bname}' + (f' • {dname}' if dname else '') + (f'  ({nama}' + (f', {jumlah} orang' if jumlah else '') + ')' if nama else '')
+        parts = [Paragraph(esc(title), h3)]
+        if kel:
+            parts.append(table(['Barang', 'Keadaan', 'Tarikh'], [[l, KEADAAN.get(e.get('keadaan') or 'baik', 'Baik'), e.get('tarikh') or ''] for l, e in kel], (.4, .3, .3)))
+            g = gallery([p for l, e in kel for p in pics_of(e, l)])
+            if g: parts.append(g)
+        if ker:
+            parts.append(table(['Kerosakan', 'Status', 'Tarikh', 'Catatan', 'Pihak bertindak', 'Tarikh selesai'],
+                               [[l, STATUS[def_status(e)], e.get('tarikh') or '', e.get('catatan') or '', e.get('pihak') or '', e.get('tarikhSelesai') or ''] for l, e in ker],
+                               (.2, .12, .1, .3, .16, .12)))
+            g = gallery([p for l, e in ker if (e.get('logId') or '') not in rec_ids for p in pics_of(e, l)])
+            if g: parts.append(g)
+            if any((e.get('logId') or '') in rec_ids and pics_of(e, l) for l, e in ker):
+                parts.append(Paragraph('Gambar kerosakan di bilik ini ada dalam bahagian Rekod kerosakan kekal di bawah.', sc))
+        el.append(KeepTogether(parts))
+    if not any_room: el.append(Paragraph('Tiada rekod kelengkapan atau kerosakan pada bilik/bangunan.', st))
+
+    el += [PageBreak(), Paragraph(f'Rekod kerosakan kekal ({month_label(month)} dan yang belum selesai)', h2)]
+    names = data.get('layoutNames') or {}
+    any_rec = False
+    for lid in sorted(data.get('layouts') or {}, key=lambda k: natural(names.get(k, k))):
+        for rid, r in sorted((((data['layouts'][lid] or {}).get('defectLog')) or {}).items(), key=lambda kv: ((kv[1] or {}).get('tarikh') or '', kv[0])):
+            if rid not in rec_ids: continue
+            r = r or {}; any_rec = True
+            place = ' • '.join(x for x in (names.get(lid, lid), r.get('building'), r.get('door')) if x) + (f' ({r["penghuni"]})' if r.get('penghuni') else '')
+            parts = [Paragraph(esc(place + ' - ' + (r.get('label') or '')), h3),
+                     table(['Status', 'Tarikh dilaporkan', 'Catatan', 'Pihak bertindak', 'Catatan tindakan', 'Tarikh selesai'],
+                           [[STATUS[def_status(r)], r.get('tarikh') or '', r.get('catatan') or '', r.get('pihak') or '', r.get('catatanTindakan') or '', r.get('tarikhSelesai') or '']],
+                           (.12, .12, .28, .16, .2, .12))]
+            g = gallery(pics_of(r, r.get('label') or 'Kerosakan'))
+            if g: parts.append(g)
+            el.append(KeepTogether(parts))
+    if not any_rec: el.append(Paragraph('Tiada rekod.', st))
     doc.build(el)
+    make_pdf.stats = stats
     return buf.getvalue()
+
+
+def data_log_ids(data, month):
+    """Ids of the defect-log records that belong in this month's report (same rule as the Excel sheet)."""
+    ids = set()
+    for layout in (data.get('layouts') or {}).values():
+        for rid, r in (((layout or {}).get('defectLog')) or {}).items():
+            r = r or {}
+            dates = [r.get('tarikh'), r.get('tarikhTindakan'), r.get('tarikhSelesai'), (r.get('dikemaskini') or '')[:10]]
+            if def_status(r) != 'selesai' or any((d or '').startswith(month) for d in dates): ids.add(rid)
+    return ids
