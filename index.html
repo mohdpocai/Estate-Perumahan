@@ -4,9 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Pengurusan Rumah Pekerja - LP2</title>
-  <!-- Pustaka html2canvas & jsPDF untuk Fungsi Ekstrak PDF -->
+  <!-- html2canvas: gambar pelan untuk laporan PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Firebase (compat SDK) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -195,6 +194,28 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .qr-hint{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5}
 .qr-url{font-size:10px;color:var(--mut);word-break:break-all;margin-top:10px;user-select:all}
 #qr-print{display:none}
+#report-print{display:none}
+#report-print{color:#0f172a;font-family:Inter,'Segoe UI',system-ui,sans-serif;font-size:9pt}
+#report-print h1{font-size:17pt;margin:0 0 2mm}
+#report-print h2{font-size:12pt;margin:6mm 0 2mm}
+#report-print h3{font-size:10pt;margin:4mm 0 1.5mm;color:#0B2447}
+#report-print .rp-sub{font-size:8pt;color:#64748b}
+#report-print .rp-none,#report-print .rp-note{font-size:8pt;color:#64748b;margin:1mm 0}
+#report-print .rp-map{width:100%;max-height:150mm;object-fit:contain;display:block;border:1px solid #cbd5e1}
+#report-print table.rp-t{width:100%;border-collapse:collapse;table-layout:auto}
+#report-print table.rp-t th{background:#0B2447;color:#fff;font-size:8pt;text-align:left;padding:1.3mm 1.8mm;border:1px solid #0B2447;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#report-print table.rp-t td{font-size:8pt;padding:1.2mm 1.8mm;border:1px solid #cbd5e1;vertical-align:top}
+#report-print table.rp-t tbody tr:nth-child(even) td{background:#F3F6FA;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#report-print table.rp-t thead{display:table-header-group}
+#report-print table.rp-t tr{break-inside:avoid;page-break-inside:avoid}
+#report-print .rp-room{break-inside:avoid;page-break-inside:avoid}
+#report-print .rp-room table.rp-t ~ table.rp-t,#report-print .rp-room .rp-gal ~ table.rp-t{margin-top:2.5mm}
+#report-print .rp-gal{display:flex;flex-wrap:wrap;gap:3mm;margin:2mm 0 1mm}
+#report-print .rp-gal figure{margin:0;width:62mm}
+#report-print .rp-gal img{max-width:62mm;max-height:46mm;display:block}
+#report-print .rp-gal figcaption{font-size:7pt;color:#475569;margin-top:.5mm}
+#report-print .rp-nopic{font-size:7pt;color:#64748b;border:1px dashed #94a3b8;padding:4mm 2mm;width:56mm}
+#report-print .rp-pb{break-before:page;page-break-before:always}
 .qp-grid{display:grid;grid-template-columns:1fr 1fr;gap:5mm}
 .qr-card-print{border:1.5px dashed #666;border-radius:3mm;padding:4mm 4mm 3mm;text-align:center;break-inside:avoid;page-break-inside:avoid;color:#000;font-family:Inter,'Segoe UI',system-ui,sans-serif}
 .qp-b{font-size:12pt;font-weight:700;line-height:1.2}
@@ -206,6 +227,8 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
   html,body{height:auto!important;overflow:visible!important;background:#fff!important}
   body.printing-qr>*:not(#qr-print){display:none!important}
   body.printing-qr #qr-print{display:block!important}
+  body.printing-report>*:not(#report-print){display:none!important}
+  body.printing-report #report-print{display:block!important}
 }
 /* door tabs (top of the detail window) */
 .door-tabs{display:none;gap:6px;overflow-x:auto;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--sf);flex-shrink:0;-webkit-overflow-scrolling:touch}
@@ -400,6 +423,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
     </div>
   </div>
   <div id="qr-print"></div>
+  <div id="report-print"></div>
 
   <script>
     const GRID_SIZE = 20;
@@ -2141,126 +2165,154 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       if (document.hidden && cameraStream) closeCameraModal();
     });
 
-    /* ===================== PDF EXPORT ===================== */
+    /* ===================== PDF EXPORT (same layout as the monthly report) =====================
+       Builds the report as a printable page: Ringkasan, Senarai penghuni, Rekod bilik (with pictures) and the
+       permanent defect records. The browser's print window then saves it as PDF ("Simpan sebagai PDF"). */
+    const RP_BULAN = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
+    const RP_KEADAAN = { baik: 'Baik', ganti: 'Perlu Diganti', rosak: 'Rosak' };
+    const rpNat = (a, b) => String(a || '').localeCompare(String(b || ''), 'ms', { numeric: true, sensitivity: 'base' });
+    const rpName = it => (it.name && it.name.trim()) || (CATEGORY_CONFIG[it.category] || {}).label || 'Elemen';
+
+    function rpRooms(list) {
+      const out = [];
+      [...list].sort((x, y) => rpNat(rpName(x), rpName(y))).forEach(item => {
+        if (item.category === 'pekerja') {
+          (item.doors || []).forEach((door, i) => {
+            const kel = ITEMS_CHECKLIST.filter(k => door.checklist && door.checklist[k.key] && door.checklist[k.key].status).map(k => [k.label, door.checklist[k.key]]);
+            const ker = DEFECT_CHECKLIST.filter(k => door.defects && door.defects[k.key] && door.defects[k.key].status).map(k => [k.label, door.defects[k.key]]);
+            out.push({ item, bname: rpName(item), dname: (door.label && door.label.trim()) || 'Pintu ' + (i + 1), nama: (door.nama || '').trim(), jumlah: door.jumlah || '', door: true, kel, ker });
+          });
+        } else {
+          const ker = checklistFor(item).filter(k => item.defects && item.defects[k.key] && item.defects[k.key].status).map(k => [k.label, item.defects[k.key]]);
+          if (ker.length) out.push({ item, bname: rpName(item), dname: '', nama: '', jumlah: '', door: false, kel: [], ker });
+        }
+      });
+      return out;
+    }
+
+    async function rpLoadPhotos(ids) {
+      const out = {};
+      await Promise.all([...ids].map(async id => {
+        try {
+          let uri = photoSrc(id);
+          if (!uri && db) { const sn = await db.ref('photos/' + id).once('value'); uri = sn.val(); if (uri) photoCache[id] = uri; }
+          if (uri) out[id] = await compressImage(uri, 900, 0.72);
+        } catch (e) { /* picture missing: shown as "(gambar tiada)" */ }
+      }));
+      return out;
+    }
+
+    function rpTable(head, rows, widths) {
+      if (!rows.length) return '<div class="rp-none">Tiada rekod.</div>';
+      const cols = widths ? '<colgroup>' + widths.map(w => `<col style="width:${w}%">`).join('') + '</colgroup>' : '';
+      return `<table class="rp-t">${cols}<thead><tr>${head.map(h => `<th>${escapeHTML(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${escapeHTML(c == null ? '' : String(c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    }
+    function rpGallery(items, photos) {
+      if (!items.length) return '';
+      return '<div class="rp-gal">' + items.map(([cap, id]) => `<figure>${photos[id] ? `<img src="${photos[id]}">` : '<div class="rp-nopic">(gambar tiada)</div>'}<figcaption>${escapeHTML(cap)}</figcaption></figure>`).join('') + '</div>';
+    }
+    const rpPics = (e, label) => [e.gambar ? [label + ' - bukti', e.gambar] : null, e.gambarTindakan ? [label + ' - bukti tindakan', e.gambarTindakan] : null].filter(Boolean);
+
     async function exportPDF(targetId) {
       loadingOverlay.style.display = 'flex';
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF('p', 'mm', 'a4');
-
       try {
-        const wasMapView = currentView === 'map';
-        if (!wasMapView) {
-          switchView('map');
-          resetView();
-          await new Promise(r => setTimeout(r, 50));
+        const list = targetId === 'all' ? elements : elements.filter(e => e.id === targetId);
+        if (!list.length) { alert('Tiada data untuk dieksport.'); return; }
+        const ids = new Set(list.map(e => e.id));
+        const now = new Date();
+        const month = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        const monthText = RP_BULAN[now.getMonth()] + ' ' + now.getFullYear();
+        const layoutName = currentLayoutName();
+
+        /* the pelan (map) as a picture, as in the old export; skipped quietly if it cannot be drawn */
+        let mapImg = '';
+        if (targetId === 'all' && window.html2canvas) {
+          try {
+            const wasMapView = currentView === 'map';
+            if (!wasMapView) { switchView('map'); resetView(); await new Promise(r => setTimeout(r, 50)); }
+            const activeElem = document.querySelector('.element-box.active');
+            if (activeElem) activeElem.classList.remove('active');
+            const cv = await html2canvas(document.getElementById('canvas-container'), { scale: 1.5, useCORS: true, backgroundColor: '#EEF2F7' });
+            if (activeElem && selectedId) activeElem.classList.add('active');
+            if (!wasMapView) switchView('list');
+            mapImg = cv.toDataURL('image/jpeg', 0.8);
+          } catch (e) { mapImg = ''; }
         }
 
-        const canvasContainer = document.getElementById('canvas-container');
-        const activeElem = document.querySelector('.element-box.active');
-        if (activeElem) activeElem.classList.remove('active');
+        /* which permanent defect records belong in the report: this month's, plus every one not yet Selesai */
+        const logRecs = Object.keys(defectLog).map(k => Object.assign({ _id: k }, defectLog[k]))
+          .filter(r => targetId === 'all' || ids.has(r.itemId))
+          .filter(r => defStatus(r) !== 'selesai' || [r.tarikh, r.tarikhTindakan, r.tarikhSelesai, (r.dikemaskini || '').slice(0, 10)].some(d => (d || '').startsWith(month)))
+          .sort((x, y) => (x.tarikh || '').localeCompare(y.tarikh || '') || x._id.localeCompare(y._id));
+        const logIds = new Set(logRecs.map(r => r._id));
+        const R = rpRooms(list);
 
-        const canvasMap = await html2canvas(canvasContainer, {
-          scale: 2, useCORS: true, backgroundColor: '#EEF2F7'
+        const photoIds = new Set();
+        const addP = e => { if (e && e.gambar && !String(e.gambar).startsWith('data:')) photoIds.add(e.gambar); if (e && e.gambarTindakan && !String(e.gambarTindakan).startsWith('data:')) photoIds.add(e.gambarTindakan); };
+        R.forEach(r => { r.kel.forEach(([, e]) => addP(e)); r.ker.forEach(([, e]) => { if (!logIds.has(e.logId || '')) addP(e); }); });
+        logRecs.forEach(addP);
+        const photos = await rpLoadPhotos(photoIds);
+
+        /* summary */
+        const S = { bangunan: list.length, bilik: 0, berpenghuni: 0, ditanda: 0, rosak: 0, ganti: 0, terbuka: 0, selesai: 0 };
+        R.forEach(r => {
+          if (r.door) { S.bilik++; if (r.nama) S.berpenghuni++; }
+          r.kel.forEach(([, e]) => { S.ditanda++; if (e.keadaan === 'rosak') S.rosak++; if (e.keadaan === 'ganti') S.ganti++; });
+          r.ker.forEach(([, e]) => { if (isOpenDefect(e)) S.terbuka++; });
         });
+        S.selesai = logRecs.filter(r => defStatus(r) === 'selesai' && (r.tarikhSelesai || '').startsWith(month)).length;
 
-        if (activeElem && selectedId) activeElem.classList.add('active');
-        if (!wasMapView) switchView('list');
-
-        const mapImgData = canvasMap.toDataURL('image/png');
-
-        pdf.setFontSize(16);
-        pdf.setTextColor(15, 23, 42);
-        pdf.text(`Pelan / Layout Visual Tapak ${currentLayoutName()}`, 14, 15);
-        pdf.setFontSize(9);
-        pdf.setTextColor(100);
-        pdf.text(`Tarikh Cetakan: ${new Date().toLocaleDateString('ms-MY')}`, 14, 21);
-
-        const imgWidth = 180;
-        const imgHeight = (canvasMap.height * imgWidth) / canvasMap.width;
-        pdf.addImage(mapImgData, 'PNG', 14, 25, imgWidth, Math.min(imgHeight, 140));
-
-        let exportList = [];
-        if (targetId === 'all') {
-          exportList = elements;
-        } else {
-          const single = elements.find(e => e.id === targetId);
-          if (single) exportList = [single];
-        }
-
-        if (exportList.length > 0) {
-          pdf.addPage();
-          for (let i = 0; i < exportList.length; i++) {
-            if (i > 0) pdf.addPage();
-            const item = exportList[i];
-            const config = CATEGORY_CONFIG[item.category];
-            const labelText = config ? config.label : 'Jalan Utama';
-
-            pdf.setFontSize(14);
-            pdf.setTextColor(15, 23, 42);
-            pdf.text(`Laporan Rekod: ${item.name || labelText}`, 14, 18);
-            pdf.setFontSize(10);
-            pdf.setTextColor(100);
-            pdf.text(`Jenis: ${labelText}`, 14, 25);
-
-            let startY = 35;
-            if (item.category === 'pekerja' && item.doors) {
-              item.doors.forEach((door, index) => {
-                if (startY > 250) { pdf.addPage(); startY = 20; }
-                const doorTitle = door.label && door.label.trim() ? door.label : `Pintu ${index + 1}`;
-                pdf.setFontSize(11);
-                pdf.setTextColor(16, 185, 129);
-                pdf.text(`${doorTitle} - Penghuni: ${door.nama || 'Tiada'} (${door.jumlah || 0} Orang)`, 14, startY);
-                startY += 6;
-                pdf.setFontSize(9);
-                pdf.setTextColor(50);
-                let hasItems = false;
-                ITEMS_CHECKLIST.forEach(chk => {
-                  const chkData = door.checklist ? door.checklist[chk.key] : null;
-                  if (chkData && chkData.status) {
-                    hasItems = true;
-                    if (startY > 270) { pdf.addPage(); startY = 20; }
-                    pdf.text(`• ${chk.label} - Tarikh: ${chkData.tarikh || 'N/A'}${chkData.keadaan ? ' [' + COND[chkData.keadaan].toUpperCase() + ']' : ''}`, 18, startY);
-                    startY += 5;
-                  }
-                });
-                if (!hasItems) { pdf.text(`• Tiada rekod kelengkapan.`, 18, startY); startY += 5; }
-
-                let hasDefects = false;
-                DEFECT_CHECKLIST.forEach(chk => {
-                  const chkData = door.defects ? door.defects[chk.key] : null;
-                  if (chkData && chkData.status) {
-                    hasDefects = true;
-                    if (startY > 270) { pdf.addPage(); startY = 20; }
-                    pdf.setTextColor(220, 38, 38);
-                    const note = chkData.catatan ? ` (${chkData.catatan})` : '';
-                    pdf.text(`! ${chk.label} - Dilaporkan: ${chkData.tarikh || 'N/A'} [${DEF_STATUS[defStatus(chkData)].l}]${note}`, 18, startY);
-                    pdf.setTextColor(50);
-                    startY += 5;
-                  }
-                });
-                if (hasDefects) startY += 1; else { pdf.text(`• Tiada kerosakan dilaporkan.`, 18, startY); startY += 5; }
-                startY += 4;
-              });
-            } else {
-              pdf.setFontSize(10);
-              let any = false;
-              checklistFor(item).forEach(chk => {
-                const d = item.defects ? item.defects[chk.key] : null;
-                if (d && d.status) {
-                  any = true;
-                  pdf.setTextColor(220, 38, 38);
-                  pdf.text(`! ${chk.label} - Dilaporkan: ${d.tarikh || 'N/A'} [${DEF_STATUS[defStatus(d)].l}]${d.catatan ? ' (' + d.catatan + ')' : ''}`, 14, startY);
-                  startY += 6;
-                }
-              });
-              if (!any) { pdf.setTextColor(50); pdf.text(`Tiada kerosakan dilaporkan.`, 14, startY); }
-            }
+        const W3 = [.2, .12, .1, .18, .14, .1, .16].map(x => x * 100);
+        const roomHtml = R.filter(r => r.kel.length || r.ker.length).map(r => {
+          const title = `${layoutName} • ${r.bname}${r.dname ? ' • ' + r.dname : ''}${r.nama ? '  (' + r.nama + (r.jumlah ? ', ' + r.jumlah + ' orang' : '') + ')' : ''}`;
+          let h = `<div class="rp-room"><h3>${escapeHTML(title)}</h3>`;
+          if (r.kel.length) {
+            h += rpTable(['Barang', 'Keadaan', 'Tarikh'], r.kel.map(([l, e]) => [l, RP_KEADAAN[e.keadaan || 'baik'] || 'Baik', e.tarikh || '']), [40, 30, 30]);
+            h += rpGallery(r.kel.flatMap(([l, e]) => rpPics(e, l)), photos);
           }
-        }
+          if (r.ker.length) {
+            h += rpTable(['Kerosakan', 'Status', 'Tarikh', 'Catatan', 'Pihak bertindak', 'Tarikh selesai'], r.ker.map(([l, e]) => [l, DEF_STATUS[defStatus(e)].l, e.tarikh || '', e.catatan || '', e.pihak || '', e.tarikhSelesai || '']), [20, 12, 10, 30, 16, 12]);
+            h += rpGallery(r.ker.filter(([, e]) => !logIds.has(e.logId || '')).flatMap(([l, e]) => rpPics(e, l)), photos);
+            if (r.ker.some(([l, e]) => logIds.has(e.logId || '') && rpPics(e, l).length)) h += '<div class="rp-note">Gambar kerosakan di bilik ini ada dalam bahagian Rekod kerosakan kekal di bawah.</div>';
+          }
+          return h + '</div>';
+        }).join('') || '<div class="rp-none">Tiada rekod kelengkapan atau kerosakan pada bilik/bangunan.</div>';
 
-        pdf.save(`Laporan_LP2_Bersama_Map_${Date.now()}.pdf`);
+        const recHtml = logRecs.map(r => {
+          const place = [layoutName, r.building, r.door].filter(Boolean).join(' • ') + (r.penghuni ? ` (${r.penghuni})` : '');
+          return `<div class="rp-room"><h3>${escapeHTML(place + ' - ' + (r.label || ''))}</h3>` +
+            rpTable(['Status', 'Tarikh dilaporkan', 'Catatan', 'Pihak bertindak', 'Catatan tindakan', 'Tarikh selesai'], [[DEF_STATUS[defStatus(r)].l, r.tarikh || '', r.catatan || '', r.pihak || '', r.catatanTindakan || '', r.tarikhSelesai || '']], [12, 12, 28, 16, 20, 12]) +
+            rpGallery(rpPics(r, r.label || 'Kerosakan'), photos) + '</div>';
+        }).join('') || '<div class="rp-none">Tiada rekod.</div>';
+
+        const resRows = R.filter(r => r.door).map(r => [layoutName, r.bname, r.dname, r.nama || '-', r.jumlah]);
+        const title = targetId === 'all' ? `Laporan - ${layoutName}` : `Laporan - ${rpName(list[0])} (${layoutName})`;
+        const box = document.getElementById('report-print');
+        box.innerHTML = `
+          <h1>${escapeHTML(title)}</h1>
+          <div class="rp-sub">Pengurusan Rumah Pekerja. Data dan gambar setakat ${now.toLocaleDateString('ms-MY')} ${now.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' })}. Rekod kerosakan: ${escapeHTML(monthText)} dan yang belum selesai.</div>
+          ${mapImg ? `<h2>Pelan</h2><img class="rp-map" src="${mapImg}">` : ''}
+          <h2>Ringkasan</h2>
+          ${rpTable(['Layout', 'Bangunan', 'Bilik', 'Bilik berpenghuni', 'Barang direkod', 'Rosak', 'Perlu diganti', 'Kerosakan belum selesai', 'Kerosakan selesai bulan ini'], [[layoutName, S.bangunan, S.bilik, S.berpenghuni, S.ditanda, S.rosak, S.ganti, S.terbuka, S.selesai]])}
+          <h2>Senarai penghuni (semua bilik)</h2>
+          ${rpTable(['Layout', 'Bangunan', 'Pintu / Bilik', 'Penghuni', 'Jumlah'], resRows, [15, 25, 20, 30, 10])}
+          <h2 class="rp-pb">Rekod bilik dan bangunan</h2>
+          ${roomHtml}
+          <h2 class="rp-pb">Rekod kerosakan kekal (${escapeHTML(monthText)} dan yang belum selesai)</h2>
+          ${recHtml}`;
+
+        await Promise.all([...box.querySelectorAll('img')].map(im => im.decode ? im.decode().catch(() => {}) : Promise.resolve()));
+        const pageStyle = document.createElement('style');
+        pageStyle.id = 'report-page-style';
+        pageStyle.textContent = '@page{size:A4 landscape;margin:12mm}';
+        document.head.appendChild(pageStyle);
+        document.body.classList.add('printing-report');
+        const done = () => { document.body.classList.remove('printing-report'); box.innerHTML = ''; pageStyle.remove(); window.removeEventListener('afterprint', done); };
+        window.addEventListener('afterprint', done);
+        loadingOverlay.style.display = 'none';
+        setTimeout(() => window.print(), 80);
       } catch (err) {
-        alert("Gagal menjana PDF: " + err.message);
+        alert('Gagal menjana laporan: ' + err.message);
       } finally {
         loadingOverlay.style.display = 'none';
       }

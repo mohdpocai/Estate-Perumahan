@@ -53,6 +53,10 @@ photos/<photoId>                            compressed photos (referenced by id)
 - When a defect is marked **Selesai** (Kerosakan page or the Status Tindakan dropdown in the building window) you pick the **completion date** (default today; not before the report date, not in the future) and it is automatically **unticked** in the building, ready for the next inspection. Its record stays as a finished repair, with **Buka Semula** if it needs to be reopened.
 - A completed defect that happens again (ticked at the next inspection) becomes a **new** record; the old one stays.
 
+## Export PDF (in the app)
+
+**Eksport Semua (PDF)** (menu) and **Eksport PDF Bangunan Ini** build the same report as the monthly PDF (Ringkasan, Senarai penghuni, Rekod bilik with pictures, permanent defect records, plus the Pelan picture for "Semua") as a printable page. The browser print window opens: choose **Simpan sebagai PDF** as the destination. Needs the pictures from Firebase, so it works online only.
+
 ## Monthly report and new-month reset
 
 `backup/` + `.github/workflows/monthly-backup.yml`: on the 1st of each month (Malaysia time) GitHub Actions reads Firebase, builds an Excel + PDF report of the previous month, saves it to a Google Drive folder, and (when `CLEAR_AFTER_BACKUP=true`) clears the senarai semak (kelengkapan ticks and Selesai defects; open defects, buildings, residents and `defectLog` stay). Nothing is cleared unless the Drive upload is verified. Setup steps: `backup/SETUP.md`. Self-test: `python backup/test_backup.py`.
