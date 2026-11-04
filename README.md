@@ -23,10 +23,18 @@ In the building detail window, a bar of door chips at the top (Ringkasan, then e
 Open a building (Senarai or Pelan) → go to a door → **📱 Kod QR bilik ini** to show, **Cetak**, **Simpan gambar** or **Salin pautan**. On the first page of the building window, **Cetak QR semua bilik** prints one A4 sheet of labels (door name + QR) to stick on each door.
 
 - Link format: `bilik.html?l=<layoutId>&b=<buildingId>&d=<door number, from 0>`. It uses the address the main app was opened on, so open the app from the GitHub Pages address before printing.
-- Scanning needs the normal staff login (same Firebase account). After login the room page opens directly.
-- The room page saves **only that room** (`layouts/<l>/elements/<b>/doors/<d>`), so people filling different rooms of one building never overwrite each other. Defect records (`defectLog`), photos, Selesai dates and the Padam/Buka Semula rules behave exactly as in the main app.
-- The door is identified by its position. If the last door of a building is removed and a new one added, the old sticker opens the new door. Removed rooms/buildings/layouts show a clear message instead.
-- `bilik.html` sets `FIXED_LAYOUT` before `shared.js`, so scanning never changes the layout remembered by the main app.
+- **No login on the QR page.** It signs in anonymously (Firebase Anonymous sign-in) and shows only that one room: Rekod Kelengkapan and Senarai Semak Kerosakan, plus **Hantar rekod ke WhatsApp**. There are no links, no menu and no logout, so there is nowhere else to go.
+- Anonymous sessions are refused by `index.html`, `kerosakan.html` and `ringkasan.html` (they sign it out and show the login window), so a QR session can never open the main app.
+- **WhatsApp number**: set `WA_NUMBER` near the top of the script in `bilik.html` (e.g. `'0123456789'` or `'60123456789'`). Empty = the person chooses the recipient. Photos are saved in the system but WhatsApp links cannot attach them.
+- The room page saves **only that room** (`layouts/<l>/elements/<b>/doors/<d>`) and its defect records, so people filling different rooms of one building never overwrite each other. Selesai dates, photos and the Padam/Buka Semula rules behave exactly as in the main app.
+- The door is identified by its position. If the last door of a building is removed and a new one added, the old sticker opens the new door. Removed rooms/buildings/layouts show a clear message.
+
+### One-time Firebase setup for the QR pages
+
+1. Firebase console → **Authentication → Sign-in method** → enable **Anonymous**.
+2. **Realtime Database → Rules** → paste `firebase-rules.json` → **Publish**. Anonymous users can then read/write only layout names, building id/name, **doors** and **defect records/photos** (by exact id). They cannot list or read buildings, other layouts, or the layout list. Logged-in staff keep full access.
+
+Limit to know: the QR links and page code are public, so anyone who learns a building id and door number can edit that door's records. Keep stickers on doors only, and use **Authentication → Users** / Rules if you need to tighten it later.
 
 ## Data flow (Firebase)
 

@@ -350,6 +350,7 @@ function initFirebase() {
   firebase.initializeApp(firebaseConfig);
   db = firebase.database();
   firebase.auth().onAuthStateChanged(user => {
+    if (user && user.isAnonymous) { firebase.auth().signOut(); return; }   // QR room pages use anonymous sessions: never let them into the app
     if (user) {
       document.getElementById('login-overlay').style.display = 'none';
       startCloudSync();

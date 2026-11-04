@@ -8,7 +8,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="shared.css?v=4">
+  <link rel="stylesheet" href="shared.css?v=5">
   <style>
 #roomView{flex:1;display:flex;flex-direction:column;overflow:hidden}
 #roomScroll{flex:1;overflow-y:auto;padding:14px 14px 48px;max-width:640px;width:100%;margin:0 auto}
@@ -20,25 +20,13 @@
 .room-save{font-size:11px;color:var(--mut);margin-top:8px;min-height:14px}
 .room-msg{text-align:center;padding:56px 16px;color:var(--mut);line-height:1.7}
 .room-msg b{color:var(--ink)}
-.room-foot{text-align:center;margin-top:16px}
-.room-foot a{text-decoration:none;display:inline-block}
+.room-send{text-align:center}
+.btn-wa{width:100%;background:#16A34A;color:#fff;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer}
+.room-hint{font-size:11px;color:var(--mut);margin-top:8px;line-height:1.5}
 .item-row .item-header{min-height:28px}
 </style>
 </head>
 <body>
-
-  <div id="login-overlay">
-    <div class="login-box">
-      <h2>🏘️ Pengurusan LP2</h2>
-      <p id="loginMessage">Sila log masuk untuk mengakses rekod.</p>
-      <div id="loginForm">
-        <input type="email" id="loginEmail" placeholder="Emel" autocomplete="username">
-        <input type="password" id="loginPassword" placeholder="Kata laluan" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin()">
-        <button onclick="doLogin()">Log Masuk</button>
-      </div>
-      <div id="loginError"></div>
-    </div>
-  </div>
 
   <div id="camera-modal">
     <h3 style="color:#38BDF8; margin-bottom:10px;">Tangkap Gambar Bukti</h3>
@@ -72,22 +60,23 @@
   <div id="app-container">
     <header id="app-header">
       <div class="brand"><span class="logo">LP2</span><span style="font-weight:600;font-size:14px;">Rekod Bilik</span></div>
-      <select id="layoutSelect" style="display:none"></select>
       <span style="flex:1"></span>
       <span id="syncStatus">...</span>
-      <button class="icon-btn" onclick="doLogout()" title="Log Keluar">⎋</button>
     </header>
     <div id="roomView"><div id="roomScroll"></div></div>
   </div>
 
-  <script src="shared.js?v=4"></script>
+  <script src="shared.js?v=5"></script>
   <script>
     /* ===== which room this page is for (from the QR code) ===== */
     const QS = new URLSearchParams(location.search);
     const Q_LAYOUT = QS.get('l') || '';
     const Q_BUILDING = QS.get('b') || '';
     const Q_DOOR = /^\d+$/.test(QS.get('d') || '') ? parseInt(QS.get('d'), 10) : -1;
-    const FIXED_LAYOUT = Q_LAYOUT;                     // shared.js: never switch to another layout
+    currentLayoutId = Q_LAYOUT;                        // this page never touches the layout remembered by the main app
+
+    /* Nombor WhatsApp penyelia (dengan kod negara, cth 60123456789 atau 0123456789). Kosongkan = pilih penerima sendiri. */
+    const WA_NUMBER = '';
 
     const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
 
@@ -96,13 +85,15 @@
       const door = item && item.doors && item.doors[Q_DOOR];
       return door ? { item, door, di: Q_DOOR } : null;
     }
+    let authFail = false, denied = false, elementsLoaded2 = false;
     function roomState() {
       if (!Q_LAYOUT || !Q_BUILDING || Q_DOOR < 0) return 'badlink';
-      if (!dbReady || !Object.keys(layouts).length) return 'loading';
-      if (!layouts[Q_LAYOUT]) return 'nolayout';
+      if (authFail) return 'authfail';
+      if (denied) return 'denied';
+      if (!dbReady || SYNC.layout === undefined) return 'loading';
+      if (!SYNC.layout) return 'nolayout';
       if (!elementsLoaded) return 'loading';
-      const item = elements.find(e => e.id === Q_BUILDING);
-      if (!item) return 'nobuilding';
+      if (!SYNC.bid) return 'nobuilding';
       return roomCtx() ? 'ok' : 'nodoor';
     }
 
@@ -291,21 +282,38 @@
       const el = document.getElementById('saveState');
       if (el) el.textContent = saveInfo;
     }
-    function saveToStorage() {
-      if (!dbReady || !currentLayoutId) return;
+    /* the defect records this room can touch are read first (by exact id), so creation dates / "already used" ids are right */
+    const primed = {};
+    function primeLog() {
       const c = roomCtx();
-      if (!c) return;
-      if (logLoaded) ensureLogIds();
-      const updates = {};
-      const json = JSON.stringify(c.door);
-      if (json !== lastRoomJson) {
-        updates['layouts/' + currentLayoutId + '/elements/' + c.item.id + '/doors/' + c.di] = JSON.parse(json);
-        lastRoomJson = json;
-      }
-      if (logLoaded) Object.assign(updates, defectLogUpdates());
-      if (!Object.keys(updates).length) return;
-      setSaveState('saving');
-      db.ref().update(updates).then(() => setSaveState('saved'), err => { setSaveState('error'); alert('Gagal simpan ke Firebase: ' + err.message); });
+      if (!c) return Promise.resolve();
+      const ids = new Set(DEFECT_CHECKLIST.map(k => legacyLogId(c.item, c.di, k.key)));
+      Object.values(c.door.defects || {}).forEach(e => { if (e && e.logId) ids.add(e.logId); });
+      return Promise.all([...ids].filter(id => !primed[id]).map(id =>
+        db.ref('layouts/' + currentLayoutId + '/defectLog/' + id).once('value').then(sn => {
+          primed[id] = true;
+          const v = sn.val();
+          if (v) { defectLog[id] = v; lastLogJson[id] = stableJson(recordCore(v)); }
+        }, () => { primed[id] = true; })));
+    }
+    function saveToStorage() {
+      if (!dbReady || !roomCtx()) return;
+      primeLog().then(() => {
+        const c = roomCtx();
+        if (!c) return;
+        logLoaded = true;
+        ensureLogIds();
+        const updates = {};
+        const json = JSON.stringify(c.door);
+        if (json !== lastRoomJson) {
+          updates['layouts/' + currentLayoutId + '/elements/' + c.item.id + '/doors/' + c.di] = JSON.parse(json);
+          lastRoomJson = json;
+        }
+        Object.assign(updates, defectLogUpdates());
+        if (!Object.keys(updates).length) return;
+        setSaveState('saving');
+        return db.ref().update(updates).then(() => setSaveState('saved'), err => { setSaveState('error'); alert('Gagal simpan: ' + err.message); });
+      });
     }
     function afterDefectChange() { saveToStorage(); renderRoom(true); }
 
@@ -316,7 +324,7 @@
       return !!(a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !['checkbox', 'file', 'button'].includes(a.type));
     }
     function msg(html) {
-      return `<div class="room-msg">${html}<div style="margin-top:16px;"><a class="btn pri" style="text-decoration:none;display:inline-block;" href="index.html">Buka aplikasi utama</a></div></div>`;
+      return `<div class="room-msg">${html}</div>`;
     }
 
     function renderPage() {                  // called by shared.js whenever data arrives or changes
@@ -337,6 +345,8 @@
 
       if (st === 'loading') { root.innerHTML = `<div class="room-msg">Memuatkan bilik…</div>`; return; }
       if (st === 'badlink') { root.innerHTML = msg('<b>Pautan QR tidak sah.</b><br>Imbas semula kod QR pada pintu bilik.'); return; }
+      if (st === 'authfail') { root.innerHTML = msg('<b>Tidak dapat membuka halaman ini.</b><br>Hubungi penyelia (akses tanpa log masuk belum diaktifkan).'); return; }
+      if (st === 'denied') { root.innerHTML = msg('<b>Tiada kebenaran.</b><br>Hubungi penyelia untuk menyemak tetapan akses.'); return; }
       if (st === 'nolayout') { root.innerHTML = msg('<b>Layout tidak dijumpai.</b><br>Layout untuk kod QR ini mungkin telah dipadam.'); return; }
       if (st === 'nobuilding') { root.innerHTML = msg('<b>Bangunan tidak dijumpai.</b><br>Bangunan untuk kod QR ini mungkin telah dipadam.'); return; }
       if (st === 'nodoor') {
@@ -364,14 +374,93 @@
         </div>
         <div class="door-card">${renderChecklistSection(item.id, di, door, 'checklist', 'checklist-title', 'Rekod Kelengkapan & Penggantian:', ITEMS_CHECKLIST)}</div>
         <div class="door-card">${renderChecklistSection(item.id, di, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}</div>
-        <div class="room-foot"><a class="btn" href="index.html?open=${encodeURIComponent(item.id)}">Buka bangunan ini</a></div>`;
+        <div class="door-card room-send">
+          <button class="btn-wa" type="button" onclick="sendRoomWhatsApp()">💬 Hantar rekod ke WhatsApp</button>
+          <div class="room-hint">Rekod disimpan automatik. Selepas siap isi, tekan butang ini untuk hantar ringkasan kepada penyelia. Gambar tidak dihantar melalui WhatsApp tetapi tersimpan dalam sistem.</div>
+        </div>`;
       loadMissingPhotos();
     }
     document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender) renderRoom(false); }, 0));
 
+    /* ===================== WHATSAPP ===================== */
+    function waNumber() {
+      let n = String(WA_NUMBER || '').replace(/\D/g, '');
+      if (n.startsWith('0')) n = '60' + n.slice(1);
+      return n;
+    }
+    function roomReport() {
+      const c = roomCtx();
+      if (!c) return null;
+      const { item, door, di } = c;
+      const label = door.label && door.label.trim() ? door.label.trim() : 'Pintu ' + (di + 1);
+      const who = door.nama && door.nama.trim() ? ' (' + door.nama.trim() + (door.jumlah ? ', ' + door.jumlah + ' orang' : '') + ')' : '';
+      const KEADAAN = { baik: 'Baik', ganti: 'Perlu Diganti', rosak: 'Rosak' };
+      const kel = ITEMS_CHECKLIST.filter(k => door.checklist[k.key] && door.checklist[k.key].status).map(k => {
+        const e = door.checklist[k.key];
+        return '• ' + k.label + ' - ' + (KEADAAN[e.keadaan || 'baik'] || 'Baik') + (e.tarikh ? ' (' + e.tarikh + ')' : '');
+      });
+      const ker = DEFECT_CHECKLIST.filter(k => door.defects[k.key] && door.defects[k.key].status).map(k => {
+        const e = door.defects[k.key];
+        return '• ' + k.label + ' - ' + DEF_STATUS[defStatus(e)].l + (e.tarikh ? ' (' + e.tarikh + ')' : '') +
+          (e.catatan ? '\n   Catatan: ' + e.catatan : '') + (e.pihak ? '\n   Pihak bertindak: ' + e.pihak : '');
+      });
+      const text = ['*LAPORAN BILIK* - ' + (layouts[Q_LAYOUT] || ''),
+        '📍 *' + (item.name || 'Bangunan') + ' • ' + label + '*' + who,
+        '📅 ' + todayStr(), '',
+        '🛏️ *Rekod Kelengkapan*', kel.length ? kel.join('\n') : 'Tiada barang direkod', '',
+        '⚠️ *Senarai Semak Kerosakan*', ker.length ? ker.join('\n') : 'Tiada kerosakan'].join('\n');
+      return { text, count: kel.length + ker.length };
+    }
+    function sendRoomWhatsApp() {
+      const r = roomReport();
+      if (!r) return;
+      if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
+      const n = waNumber();
+      window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(r.text.slice(0, 3500)), '_blank');
+    }
+
+    /* ===================== CONNECTION (no login: anonymous access, this room only) ===================== */
+    const SYNC = { layout: undefined, bid: undefined, name: undefined, door: undefined };
+    function rebuild() {
+      layouts = SYNC.layout ? { [Q_LAYOUT]: SYNC.layout } : {};
+      elements = [];
+      if (SYNC.bid) {
+        const doors = [];
+        if (SYNC.door) doors[Q_DOOR] = Object.assign({ label: '', nama: '', jumlah: '1' }, SYNC.door, { checklist: SYNC.door.checklist || {}, defects: SYNC.door.defects || {} });
+        elements = [{ id: Q_BUILDING, type: 'building', category: 'pekerja', name: SYNC.name || '', doors, defects: {} }];
+      }
+      elementsLoaded = ['layout', 'bid', 'name', 'door'].every(k => SYNC[k] !== undefined);
+      renderPage();
+    }
+    function listen(path, key, fn) {
+      db.ref(path).on('value', sn => { SYNC[key] = sn.val(); if (fn) fn(); rebuild(); }, err => { denied = true; renderRoom(true); });
+    }
+    function startRoomSync() {
+      dbReady = true;
+      const b = 'layouts/' + Q_LAYOUT + '/elements/' + Q_BUILDING;
+      db.ref('.info/connected').on('value', sn => setSyncStatus(sn.val() === true));
+      listen('layoutNames/' + Q_LAYOUT, 'layout');
+      listen(b + '/id', 'bid');
+      listen(b + '/name', 'name');
+      listen(b + '/doors/' + Q_DOOR, 'door');
+    }
+    function initFirebase() {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      const auth = firebase.auth();
+      let started = false;
+      auth.onAuthStateChanged(user => {
+        if (user) { if (!started) { started = true; startRoomSync(); } return; }
+        // nobody signed in: use an anonymous session that is forgotten when the browser closes
+        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION)
+          .then(() => auth.signInAnonymously())
+          .catch(() => { authFail = true; renderRoom(true); });
+      });
+    }
+
     /* ===================== INIT ===================== */
     renderRoom(true);
-    initFirebase();
+    if (Q_LAYOUT && Q_BUILDING && Q_DOOR >= 0) initFirebase();
   </script>
 </body>
 </html>

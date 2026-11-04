@@ -1,0 +1,23 @@
+{
+  "rules": {
+    ".read": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'",
+    ".write": "auth != null && auth.token.firebase.sign_in_provider != 'anonymous'",
+
+    "layoutNames": { "$l": { ".read": "auth != null" } },
+
+    "layouts": {
+      "$l": {
+        "elements": {
+          "$b": {
+            "id":   { ".read": "auth != null" },
+            "name": { ".read": "auth != null" },
+            "doors": { "$d": { ".read": "auth != null", ".write": "auth != null" } }
+          }
+        },
+        "defectLog": { "$r": { ".read": "auth != null", ".write": "auth != null" } }
+      }
+    },
+
+    "photos": { "$p": { ".read": "auth != null", ".write": "auth != null" } }
+  }
+}
