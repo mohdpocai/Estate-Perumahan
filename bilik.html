@@ -22,6 +22,7 @@
 .room-msg b{color:var(--ink)}
 .room-send{text-align:center}
 .btn-wa{width:100%;background:#16A34A;color:#fff;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer}
+.btn-share{width:100%;background:#fff;color:#16A34A;border:2px solid #16A34A;border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}
 .room-hint{font-size:11px;color:var(--mut);margin-top:8px;line-height:1.5}
 .item-row .item-header{min-height:28px}
 </style>
@@ -376,7 +377,8 @@
         <div class="door-card">${renderChecklistSection(item.id, di, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}</div>
         <div class="door-card room-send">
           <button class="btn-wa" type="button" onclick="sendRoomWhatsApp()">💬 Hantar rekod ke WhatsApp</button>
-          <div class="room-hint">Rekod disimpan automatik. Selepas siap isi, tekan butang ini untuk hantar ringkasan kepada penyelia. Gambar tidak dihantar melalui WhatsApp tetapi tersimpan dalam sistem.</div>
+          ${navigator.share ? '<button class="btn-share" type="button" onclick="shareRoomWithPhotos()">📤 Kongsi dengan gambar</button>' : ''}
+          <div class="room-hint">Rekod disimpan automatik. Butang hijau menghantar ringkasan dengan pautan gambar. "Kongsi dengan gambar" melampirkan gambar sebenar: pilih WhatsApp, kemudian penerima.</div>
         </div>`;
       loadMissingPhotos();
     }
@@ -395,21 +397,26 @@
       const label = door.label && door.label.trim() ? door.label.trim() : 'Pintu ' + (di + 1);
       const who = door.nama && door.nama.trim() ? ' (' + door.nama.trim() + (door.jumlah ? ', ' + door.jumlah + ' orang' : '') + ')' : '';
       const KEADAAN = { baik: 'Baik', ganti: 'Perlu Diganti', rosak: 'Rosak' };
+      const photoIds = [];
+      const pics = e => [e.gambar, e.gambarTindakan].filter(g => g && !String(g).startsWith('data:')).map(g => {
+        photoIds.push(g);
+        return '\n   📷 ' + new URL('gambar.html?p=' + encodeURIComponent(g), location.href).href;
+      }).join('');
       const kel = ITEMS_CHECKLIST.filter(k => door.checklist[k.key] && door.checklist[k.key].status).map(k => {
         const e = door.checklist[k.key];
-        return '• ' + k.label + ' - ' + (KEADAAN[e.keadaan || 'baik'] || 'Baik') + (e.tarikh ? ' (' + e.tarikh + ')' : '');
+        return '• ' + k.label + ' - ' + (KEADAAN[e.keadaan || 'baik'] || 'Baik') + (e.tarikh ? ' (' + e.tarikh + ')' : '') + pics(e);
       });
       const ker = DEFECT_CHECKLIST.filter(k => door.defects[k.key] && door.defects[k.key].status).map(k => {
         const e = door.defects[k.key];
         return '• ' + k.label + ' - ' + DEF_STATUS[defStatus(e)].l + (e.tarikh ? ' (' + e.tarikh + ')' : '') +
-          (e.catatan ? '\n   Catatan: ' + e.catatan : '') + (e.pihak ? '\n   Pihak bertindak: ' + e.pihak : '');
+          (e.catatan ? '\n   Catatan: ' + e.catatan : '') + (e.pihak ? '\n   Pihak bertindak: ' + e.pihak : '') + pics(e);
       });
       const text = ['*LAPORAN BILIK* - ' + (layouts[Q_LAYOUT] || ''),
         '📍 *' + (item.name || 'Bangunan') + ' • ' + label + '*' + who,
         '📅 ' + todayStr(), '',
         '🛏️ *Rekod Kelengkapan*', kel.length ? kel.join('\n') : 'Tiada barang direkod', '',
         '⚠️ *Senarai Semak Kerosakan*', ker.length ? ker.join('\n') : 'Tiada kerosakan'].join('\n');
-      return { text, count: kel.length + ker.length };
+      return { text, count: kel.length + ker.length, photoIds };
     }
     function sendRoomWhatsApp() {
       const r = roomReport();
@@ -417,6 +424,26 @@
       if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
       const n = waNumber();
       window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(r.text.slice(0, 3500)), '_blank');
+    }
+    /* share with the real pictures attached (phone share sheet: choose WhatsApp, then the contact) */
+    async function photoFile(g, i) {
+      let uri = photoSrc(g);
+      if (!uri) { const sn = await db.ref('photos/' + g).once('value'); uri = sn.val(); if (uri) photoCache[g] = uri; }
+      if (!uri) return null;
+      const blob = await (await fetch(uri)).blob();
+      return new File([blob], 'gambar' + (i + 1) + '.jpg', { type: blob.type || 'image/jpeg' });
+    }
+    async function shareRoomWithPhotos() {
+      const r = roomReport();
+      if (!r) return;
+      if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
+      const data = { title: 'Laporan Bilik', text: r.text };
+      try {
+        const files = [];
+        for (const g of r.photoIds.slice(0, 10)) { const f = await photoFile(g, files.length); if (f) files.push(f); }
+        if (files.length && navigator.canShare && navigator.canShare({ files })) data.files = files;
+      } catch (err) { /* share without pictures */ }
+      try { await navigator.share(data); } catch (err) { if (err && err.name !== 'AbortError') alert('Gagal kongsi: ' + err.message); }
     }
 
     /* ===================== CONNECTION (no login: anonymous access, this room only) ===================== */

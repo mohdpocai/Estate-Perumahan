@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gambar - LP2</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <style>
+    body{margin:0;background:#0b1b33;color:#cbd5e1;font-family:system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}
+    img{max-width:100%;max-height:100vh;display:block}
+    p{padding:24px;line-height:1.6}
+  </style>
+</head>
+<body>
+  <p id="msg">Memuatkan gambar…</p>
+  <script>
+    /* Shows one saved photo (linked from the WhatsApp report). Read-only, no other links. */
+const firebaseConfig = {
+      apiKey: "AIzaSyCmc1cccrzh29H6SzWPt84a8rK1x747jU8",
+      authDomain: "estate-perumahan.firebaseapp.com",
+      databaseURL: "https://estate-perumahan-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "estate-perumahan",
+      messagingSenderId: "821767387974",
+      appId: "1:821767387974:web:e933ff358659c498994347"
+    };
+    const id = new URLSearchParams(location.search).get('p') || '';
+    const msg = document.getElementById('msg');
+    function show(uri) {
+      if (!uri) { msg.textContent = 'Gambar tidak dijumpai.'; return; }
+      const img = new Image(); img.alt = 'Gambar'; img.onload = () => { msg.replaceWith(img); }; img.src = uri;
+    }
+    if (!/^[A-Za-z0-9_-]{1,60}$/.test(id)) { msg.textContent = 'Pautan gambar tidak sah.'; }
+    else {
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+      const load = () => firebase.database().ref('photos/' + id).once('value').then(s => show(s.val()), () => { msg.textContent = 'Tiada kebenaran melihat gambar ini.'; });
+      auth.onAuthStateChanged(u => {
+        if (u) { load(); return; }
+        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(() => auth.signInAnonymously()).catch(() => { msg.textContent = 'Tidak dapat membuka gambar.'; });
+      });
+    }
+  </script>
+</body>
+</html>
