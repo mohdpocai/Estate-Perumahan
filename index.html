@@ -1086,6 +1086,9 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
         }
         return matchesSearch(item);
       });
+      // Senarai is always A-Z by building name (numbers in order: Block 2 before Block 10); the stored order is untouched
+      const listName = it => (it.name && it.name.trim()) || (CATEGORY_CONFIG[it.category] || {}).label || '';
+      filtered.sort((a, b) => listName(a).localeCompare(listName(b), 'ms', { numeric: true, sensitivity: 'base' }));
 
       if (filtered.length === 0) {
         listScroll.innerHTML = `<div class="empty-state">Tiada bangunan dijumpai.<br>Tekan butang "+" untuk tambah bangunan baharu.</div>`;
