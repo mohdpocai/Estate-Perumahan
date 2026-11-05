@@ -1819,6 +1819,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       if (!door) return;
       const r = buildRoomReport(item, door, di, currentLayoutName());
       if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
+      saveRoomNow();
       openWhatsApp(r.text);
     }
 
@@ -1846,10 +1847,10 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
           ${renderChecklistSection(item.id, index, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}
         </div>
         <div class="door-card" style="text-align:center;">
-          <button class="btn-send" type="button" style="width:100%;padding:14px;font-size:16px;font-weight:700;background:#1D4ED8;color:#fff;border-color:#1D4ED8;margin-bottom:8px;" onclick="saveRoomNow()">💾 Simpan</button>
+          <button class="btn-send" type="button" style="width:100%;padding:14px;font-size:16px;font-weight:700;background:#1D4ED8;color:#fff;border-color:#1D4ED8;margin-bottom:8px;" onclick="saveRoomNow()">💾 Simpan sahaja</button>
           <div class="card-sub" id="roomSaveMsg" style="min-height:16px;margin:0 0 10px;"></div>
-          <button class="btn-send wa" type="button" style="width:100%;padding:14px;font-size:16px;font-weight:700;" onclick="sendRoomReport('${item.id}', ${index})">💬 Hantar rekod bilik ini ke WhatsApp</button>
-          <div class="card-sub" style="margin-top:8px;">Rekod disimpan automatik. Tekan Simpan untuk pastikan, kemudian hantar selepas semua senarai semak siap diisi.</div>
+          <button class="btn-send wa" type="button" style="width:100%;padding:14px;font-size:16px;font-weight:700;" onclick="sendRoomReport('${item.id}', ${index})">💾💬 Simpan &amp; Hantar ke WhatsApp</button>
+          <div class="card-sub" style="margin-top:8px;">Rekod disimpan automatik. "Simpan sahaja" hanya menyimpan; "Simpan &amp; Hantar" menyimpan kemudian membuka WhatsApp.</div>
         </div>
       `;
     }

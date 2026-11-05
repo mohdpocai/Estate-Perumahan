@@ -388,11 +388,10 @@
         <div class="door-card">${renderChecklistSection(item.id, di, door, 'checklist', 'checklist-title', 'Rekod Kelengkapan & Penggantian:', ITEMS_CHECKLIST)}</div>
         <div class="door-card">${renderChecklistSection(item.id, di, door, 'defects', 'checklist-title-defect', '⚠️ Senarai Semak Kerosakan:', DEFECT_CHECKLIST)}</div>
         <div class="door-card room-send">
-          <button class="btn-save" type="button" onclick="saveNow()">💾 Simpan</button>
+          <button class="btn-wa" type="button" onclick="sendRoomWhatsApp()">💾💬 Simpan &amp; Hantar ke WhatsApp</button>
           <div class="room-save js-save-state" style="margin:6px 0 10px;">${escapeHTML(saveInfo)}</div>
-          <button class="btn-wa" type="button" onclick="sendRoomWhatsApp()">💬 Hantar rekod ke WhatsApp</button>
           ${navigator.share ? '<button class="btn-share" type="button" onclick="shareRoomWithPhotos()">📤 Kongsi dengan gambar</button>' : ''}
-          <div class="room-hint">Rekod disimpan automatik; tekan Simpan untuk pastikan. Butang hijau menghantar ringkasan dengan pautan gambar. "Kongsi dengan gambar" melampirkan gambar sebenar: pilih WhatsApp, kemudian penerima.</div>
+          <div class="room-hint">Butang hijau menyimpan rekod kemudian menghantar ringkasan dengan pautan gambar. "Kongsi dengan gambar" melampirkan gambar sebenar: pilih WhatsApp, kemudian penerima.</div>
         </div>`;
       loadMissingPhotos();
     }
@@ -407,6 +406,7 @@
       const r = roomReport();
       if (!r) return;
       if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
+      saveNow();
       openWhatsApp(r.text);
     }
     /* share with the real pictures attached (phone share sheet: choose WhatsApp, then the contact) */
@@ -421,6 +421,7 @@
       const r = roomReport();
       if (!r) return;
       if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
+      saveNow();
       const data = { title: 'Laporan Bilik', text: r.text };
       try {
         const files = [];
