@@ -390,8 +390,7 @@
         <div class="door-card room-send">
           <button class="btn-wa" type="button" onclick="sendRoomWhatsApp()">💾💬 Simpan &amp; Hantar ke WhatsApp</button>
           <div class="room-save js-save-state" style="margin:6px 0 10px;">${escapeHTML(saveInfo)}</div>
-          ${navigator.share ? '<button class="btn-share" type="button" onclick="shareRoomWithPhotos()">📤 Kongsi dengan gambar</button>' : ''}
-          <div class="room-hint">Butang hijau menyimpan rekod kemudian menghantar ringkasan dengan pautan gambar. "Kongsi dengan gambar" melampirkan gambar sebenar: pilih WhatsApp, kemudian penerima.</div>
+          <div class="room-hint">Butang hijau menyimpan rekod kemudian membuka kongsi: pilih WhatsApp dan penerima, gambar dilampirkan. </div>
         </div>`;
       loadMissingPhotos();
     }
@@ -407,6 +406,7 @@
       if (!r) return;
       if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
       saveNow();
+      if (navigator.share) { shareRoomWithPhotos(true); return; }   /* phone: share sheet with the real pictures */
       openWhatsApp(r.text);
     }
     /* share with the real pictures attached (phone share sheet: choose WhatsApp, then the contact) */
@@ -417,18 +417,18 @@
       const blob = await (await fetch(uri)).blob();
       return new File([blob], 'gambar' + (i + 1) + '.jpg', { type: blob.type || 'image/jpeg' });
     }
-    async function shareRoomWithPhotos() {
+    async function shareRoomWithPhotos(saved) {
       const r = roomReport();
       if (!r) return;
       if (!r.count) { alert('Belum ada rekod untuk dihantar. Tandakan barang atau kerosakan dahulu.'); return; }
-      saveNow();
+      if (!saved) saveNow();
       const data = { title: 'Laporan Bilik', text: r.text };
       try {
         const files = [];
         for (const g of r.photoIds.slice(0, 10)) { const f = await photoFile(g, files.length); if (f) files.push(f); }
         if (files.length && navigator.canShare && navigator.canShare({ files })) data.files = files;
       } catch (err) { /* share without pictures */ }
-      try { await navigator.share(data); } catch (err) { if (err && err.name !== 'AbortError') alert('Gagal kongsi: ' + err.message); }
+      try { await navigator.share(data); } catch (err) { if (err && err.name !== 'AbortError') openWhatsApp(r.text); }
     }
 
     /* ===================== CONNECTION (no login: anonymous access, this room only) ===================== */
