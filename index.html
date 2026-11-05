@@ -134,6 +134,12 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .item-row-alert{background:#FEF8F8;border-color:#FBCACA}
 .item-header{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:13px;font-weight:500}
 .item-header input[type=checkbox]{width:16px;height:16px;accent-color:var(--brand);cursor:pointer}
+.cond-row{display:flex;gap:8px;margin-top:8px}
+.cond-chip{flex:1;display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:10px 10px;font-size:13px;font-weight:600;cursor:pointer;line-height:1.25}
+.cond-chip input{width:20px;height:20px;flex-shrink:0;cursor:pointer}
+.cond-chip.ok input{accent-color:#16A34A}.cond-chip.bad input{accent-color:#DC2626}
+.cond-chip.ok.on{background:#DCFCE7;border-color:#16A34A;color:#166534}
+.cond-chip.bad.on{background:#FEE2E2;border-color:#DC2626;color:#991B1B}
 .item-details{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:8px}
 .image-action-buttons{display:flex;gap:6px}
 .btn-camera-action,.btn-gallery-action{flex:1;padding:8px 4px;border:1px solid var(--line);background:#fff;color:var(--brand);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-align:center}
@@ -1650,9 +1656,13 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       return `
         <div class="${rowClass}">
           <div class="item-header">
-            <span>${chk.label}${!isDefect && itemData.status && itemData.keadaan ? ` <span class="badge ${itemData.keadaan === 'rosak' ? 'st-new' : 'st-prog'}">${COND[itemData.keadaan]}</span>` : ''}${isDefect && itemData.status ? ` <span class="badge ${DEF_STATUS[defStatus(itemData)].c}">${DEF_STATUS[defStatus(itemData)].l}</span>` : ''}</span>
-            <input type="checkbox" ${isChecked} onchange="updateItemStatus('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.checked)">
+            <span>${chk.label}${isDefect && itemData.status ? ` <span class="badge ${DEF_STATUS[defStatus(itemData)].c}">${DEF_STATUS[defStatus(itemData)].l}</span>` : ''}</span>
+            ${isDefect ? `<input type="checkbox" ${isChecked} onchange="updateItemStatus('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.checked)">` : ''}
           </div>
+          ${!isDefect ? `<div class="cond-row">
+            <label class="cond-chip ok ${itemData.status && !itemData.keadaan ? 'on' : ''}"><input type="checkbox" ${itemData.status && !itemData.keadaan ? 'checked' : ''} onchange="setItemCondition('${itemId}', ${doorIndex}, '${chk.key}', 'baik', this.checked)"> Bagus</label>
+            <label class="cond-chip bad ${itemData.status && itemData.keadaan ? 'on' : ''}"><input type="checkbox" ${itemData.status && itemData.keadaan ? 'checked' : ''} onchange="setItemCondition('${itemId}', ${doorIndex}, '${chk.key}', 'ganti', this.checked)"> Perlu Diganti / Rosak</label>
+          </div>` : ''}
           ${itemData.status ? `
             <div class="item-details">
               <div class="form-group" style="margin:0;">
@@ -1675,14 +1685,6 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
                   <input type="text" value="${escapeHTML(itemData.pihak || '')}" maxlength="60" placeholder="Cth: Unit Penyelenggaraan" onchange="setDefectField('${itemId}', ${doorIndex}, '${chk.key}', 'pihak', this.value)">
                 </div>
               ` : ''}
-              ${!isDefect ? `<div class="form-group" style="margin:0;">
-                <label style="font-size:12px;">Keadaan Barang:</label>
-                <select onchange="updateItemCondition('${itemId}', ${doorIndex}, '${listKey}', '${chk.key}', this.value)">
-                  <option value="" ${!itemData.keadaan ? 'selected' : ''}>Baik</option>
-                  <option value="ganti" ${itemData.keadaan === 'ganti' ? 'selected' : ''}>Perlu Diganti</option>
-                  <option value="rosak" ${itemData.keadaan === 'rosak' ? 'selected' : ''}>Rosak</option>
-                </select>
-              </div>` : ''}
               <div class="form-group" style="margin:0;">
                 <label style="font-size:10px;">Gambar Bukti${isDefect ? ' Kerosakan' : ' Kelengkapan'}:</label>
                 <div class="image-action-buttons">
@@ -1917,7 +1919,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       return `<div class="door-ov">
         <div class="door-ov-head"><b>Ringkasan Pintu</b><span>${filled} / ${doors.length} berpenghuni</span></div>
         <div class="door-ov-grid" style="grid-template-columns:repeat(${cols},minmax(0,1fr));">${tiles}</div>
-        <div class="door-ov-legend"><span><i style="background:var(--ok)"></i>Baik</span><span><i style="background:#D97706"></i>Perlu ganti</span><span><i style="background:var(--bad)"></i>Rosak / kerosakan</span><span><i style="background:#CBD5E1"></i>Kosong</span></div>
+        <div class="door-ov-legend"><span><i style="background:var(--ok)"></i>Bagus</span><span><i style="background:#D97706"></i>Perlu ganti / rosak</span><span><i style="background:var(--bad)"></i>Rosak / kerosakan</span><span><i style="background:#CBD5E1"></i>Kosong</span></div>
         <div class="send-card" style="margin-top:12px;">
           <div class="send-title">📱 Kod QR setiap bilik</div>
           <div class="send-row"><button class="btn-send" type="button" onclick="printQr('${item.id}')">🖨️ Cetak QR semua bilik (${doors.length})</button></div>
@@ -1965,7 +1967,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 
         const flagged = replaceList(item);
         if (flagged.length) {
-          formHTML += `<div class="warn-banner"><b>⚠️ ${flagged.length} barang perlu diganti / rosak</b><br>${flagged.map(f => `${escapeHTML(f.door)}: ${f.label} (${f.k === 'rosak' ? 'Rosak' : 'Perlu Diganti'})`).join('<br>')}</div>`;
+          formHTML += `<div class="warn-banner"><b>⚠️ ${flagged.length} barang perlu diganti / rosak</b><br>${flagged.map(f => `${escapeHTML(f.door)}: ${f.label} (${f.k === 'rosak' ? 'Rosak' : 'Perlu Diganti / Rosak'})`).join('<br>')}</div>`;
         }
 
         if (isPekerja) {
@@ -2067,7 +2069,24 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
       openDetailModal(id);
       refreshBackgroundView();
     }
-    const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
+    const COND = { ganti: 'Perlu Diganti / Rosak', rosak: 'Rosak' };
+    /* Rekod Kelengkapan: two tick boxes. 'baik' = Bagus (status true, no keadaan); 'ganti' = Perlu Diganti / Rosak.
+       An older stored 'rosak' still shows as ticked under Perlu Diganti / Rosak. Ticking one switches off the other. */
+    function setItemCondition(id, di, key, cond, checked) {
+      const e = getChecklistEntry(id, di, 'checklist', key, true);
+      if (!e) return;
+      if (!checked) { e.status = false; delete e.keadaan; }
+      else {
+        const wasBad = !!e.keadaan, goBad = cond === 'ganti';
+        const changed = !e.status || wasBad !== goBad;
+        e.status = true;
+        if (goBad) { if (!e.keadaan) e.keadaan = 'ganti'; } else delete e.keadaan;
+        if (changed || !e.tarikh) e.tarikh = todayStr();
+      }
+      saveToStorage();
+      openDetailModal(id);
+      refreshBackgroundView();
+    }
     function updateItemCondition(id, di, listKey, key, val) {
       const e = getChecklistEntry(id, di, listKey, key, false);
       if (!e) return;
@@ -2179,7 +2198,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
        Builds the report as a printable page: Ringkasan, Senarai penghuni, Rekod bilik (with pictures) and the
        permanent defect records. The browser's print window then saves it as PDF ("Simpan sebagai PDF"). */
     const RP_BULAN = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
-    const RP_KEADAAN = { baik: 'Baik', ganti: 'Perlu Diganti', rosak: 'Rosak' };
+    const RP_KEADAAN = { baik: 'Bagus', ganti: 'Perlu Diganti / Rosak', rosak: 'Rosak' };
     const rpNat = (a, b) => String(a || '').localeCompare(String(b || ''), 'ms', { numeric: true, sensitivity: 'base' });
     const rpName = it => (it.name && it.name.trim()) || (CATEGORY_CONFIG[it.category] || {}).label || 'Elemen';
 
@@ -2277,7 +2296,7 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
           const title = `${layoutName} • ${r.bname}${r.dname ? ' • ' + r.dname : ''}${r.nama ? '  (' + r.nama + (r.jumlah ? ', ' + r.jumlah + ' orang' : '') + ')' : ''}`;
           let h = `<div class="rp-room"><h3>${escapeHTML(title)}</h3>`;
           if (r.kel.length) {
-            h += rpTable(['Barang', 'Keadaan', 'Tarikh'], r.kel.map(([l, e]) => [l, RP_KEADAAN[e.keadaan || 'baik'] || 'Baik', e.tarikh || '']), [40, 30, 30]);
+            h += rpTable(['Barang', 'Keadaan', 'Tarikh'], r.kel.map(([l, e]) => [l, RP_KEADAAN[e.keadaan || 'baik'] || 'Bagus', e.tarikh || '']), [40, 30, 30]);
             h += rpGallery(r.kel.flatMap(([l, e]) => rpPics(e, l)), photos);
           }
           if (r.ker.length) {

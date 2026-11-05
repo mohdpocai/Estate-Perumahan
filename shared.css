@@ -113,6 +113,12 @@ input:focus,select:focus{outline:2px solid rgba(29,111,184,.35);border-color:var
 .item-row-alert{background:#FEF8F8;border-color:#FBCACA}
 .item-header{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:13px;font-weight:500}
 .item-header input[type=checkbox]{width:16px;height:16px;accent-color:var(--brand);cursor:pointer}
+.cond-row{display:flex;gap:8px;margin-top:8px}
+.cond-chip{flex:1;display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:10px 10px;font-size:13px;font-weight:600;cursor:pointer;line-height:1.25}
+.cond-chip input{width:20px;height:20px;flex-shrink:0;cursor:pointer}
+.cond-chip.ok input{accent-color:#16A34A}.cond-chip.bad input{accent-color:#DC2626}
+.cond-chip.ok.on{background:#DCFCE7;border-color:#16A34A;color:#166534}
+.cond-chip.bad.on{background:#FEE2E2;border-color:#DC2626;color:#991B1B}
 .item-details{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:8px}
 .image-action-buttons{display:flex;gap:6px}
 .btn-camera-action,.btn-gallery-action{flex:1;padding:8px 4px;border:1px solid var(--line);background:#fff;color:var(--brand);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-align:center}

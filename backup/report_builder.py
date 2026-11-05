@@ -11,7 +11,7 @@ ROAD = [('lubangJalan', 'Lubang / Jalan Berlubang'), ('lampuJalan', 'Lampu Jalan
         ('jalanRetak', 'Permukaan Jalan Retak / Runtuh'), ('papanTanda', 'Papan Tanda Rosak'), ('bahuJalan', 'Bahu Jalan Terhakis')]
 CATEGORY = {'pekerja': 'Rumah Pekerja', 'office': 'Pejabat (Office)', 'kedai': 'Kedai / Mart', 'dewan': 'Dewan Serbaguna',
             'store': 'Store / Depo', 'surau': 'Surau', 'jalan': 'Jalan Utama'}
-KEADAAN = {'baik': 'Baik', 'ganti': 'Perlu Diganti', 'rosak': 'Rosak'}
+KEADAAN = {'baik': 'Bagus', 'ganti': 'Perlu Diganti / Rosak', 'rosak': 'Rosak'}
 STATUS = {'baru': 'Baharu', 'proses': 'Dalam Tindakan', 'selesai': 'Selesai'}
 BULAN = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember']
 
@@ -71,7 +71,7 @@ def collect(data, month):
                         if e and e.get('status'):
                             k = e.get('keadaan') or 'baik'
                             s['ditanda'] += 1; s['rosak'] += k == 'rosak'; s['ganti'] += k == 'ganti'
-                            out['kel'].append([lname, bname, dname, nama, label, KEADAAN.get(k, 'Baik'), e.get('tarikh') or ''])
+                            out['kel'].append([lname, bname, dname, nama, label, KEADAAN.get(k, 'Bagus'), e.get('tarikh') or ''])
                     for key, label in DEFECTS:
                         e = (door.get('defects') or {}).get(key)
                         if e and e.get('status'):
@@ -98,7 +98,7 @@ def collect(data, month):
     return out
 
 
-H_SUM = ['Layout', 'Bangunan', 'Bilik', 'Bilik berpenghuni', 'Barang direkod', 'Rosak', 'Perlu diganti',
+H_SUM = ['Layout', 'Bangunan', 'Bilik', 'Bilik berpenghuni', 'Barang direkod', 'Rosak', 'Perlu diganti / rosak',
          'Kerosakan belum selesai', 'Kerosakan selesai bulan ini']
 H_KEL = ['Layout', 'Bangunan', 'Pintu / Bilik', 'Penghuni', 'Barang', 'Keadaan', 'Tarikh']
 H_KER = ['Layout', 'Bangunan', 'Pintu / Bilik', 'Penghuni', 'Kerosakan', 'Status', 'Tarikh dilaporkan', 'Catatan', 'Pihak bertindak', 'Tarikh selesai']
@@ -114,8 +114,8 @@ def make_xlsx(data, month):
     from openpyxl.utils import get_column_letter
     c = collect(data, month)
     wb = Workbook(); wb.remove(wb.active)
-    H_BRG = ['Layout', 'Barang', 'Direkod', 'Baik', 'Rosak', 'Perlu diganti', 'Perlu tindakan']
-    H_BLD = ['Layout', 'Bangunan', 'Barang', 'Direkod', 'Baik', 'Rosak', 'Perlu diganti', 'Perlu tindakan']
+    H_BRG = ['Layout', 'Barang', 'Direkod', 'Bagus', 'Rosak', 'Perlu diganti / rosak', 'Perlu tindakan']
+    H_BLD = ['Layout', 'Bangunan', 'Barang', 'Direkod', 'Bagus', 'Rosak', 'Perlu diganti / rosak', 'Perlu tindakan']
     from collections import defaultdict
     by_item = defaultdict(lambda: [0, 0, 0, 0]); by_bld = defaultdict(lambda: [0, 0, 0, 0])
     inv = {v: k for k, v in KEADAAN.items()}
@@ -292,7 +292,7 @@ def make_pdf(data, month, c=None, photos=None):
         title = f'{lname} • {bname}' + (f' • {dname}' if dname else '') + (f'  ({nama}' + (f', {jumlah} orang' if jumlah else '') + ')' if nama else '')
         parts = [Paragraph(esc(title), h3)]
         if kel:
-            parts.append(table(['Barang', 'Keadaan', 'Tarikh'], [[l, KEADAAN.get(e.get('keadaan') or 'baik', 'Baik'), e.get('tarikh') or ''] for l, e in kel], (.4, .3, .3)))
+            parts.append(table(['Barang', 'Keadaan', 'Tarikh'], [[l, KEADAAN.get(e.get('keadaan') or 'baik', 'Bagus'), e.get('tarikh') or ''] for l, e in kel], (.4, .3, .3)))
             g = gallery([p for l, e in kel for p in pics_of(e, l)])
             if g: parts.append(g)
         if ker:

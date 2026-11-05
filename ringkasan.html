@@ -50,7 +50,7 @@
 
   <script src="shared.js?v=5"></script>
   <script>
-const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
+const COND = { ganti: 'Perlu Diganti / Rosak', rosak: 'Rosak' };
 
     function allEquip() {
       const out = [];
@@ -79,7 +79,7 @@ const COND = { ganti: 'Perlu Diganti', rosak: 'Rosak' };
       const shown = bad.filter(r => sumFilter === 'semua' || cond(r) === sumFilter);
       const card = (k, v, l, c) => `<div class="sum-card ${sumFilter === k ? 'on' : ''}" onclick="setSumFilter('${k}')"><b style="color:${c}">${v}</b><span>${l}</span></div>`;
       const chip = (k, l) => `<button type="button" onclick="setSumSort('${k}')" style="border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;${sumSort === k ? 'background:var(--nav);color:#fff;border-color:var(--nav);' : 'background:var(--sf);color:var(--ink);'}">${l}</button>`;
-      let html = `<div class="sum-row">${card('semua', bad.length, 'Perlu tindakan', 'var(--ink)')}${card('rosak', n('rosak'), 'Rosak', 'var(--bad)')}${card('ganti', n('ganti'), 'Perlu diganti', 'var(--warn)')}</div>
+      let html = `<div class="sum-row">${card('semua', bad.length, 'Perlu tindakan', 'var(--ink)')}${card('rosak', n('rosak'), 'Rosak', 'var(--bad)')}${card('ganti', n('ganti'), 'Perlu diganti / rosak', 'var(--warn)')}</div>
         <div class="def-meta" style="margin-top:-4px;">${recorded.length - bad.length} daripada ${recorded.length} barang direkod dalam keadaan baik</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;"><span class="def-meta" style="margin:0;">Susun ikut:</span>${chip('bangunan', 'Nama bangunan')}${chip('penghuni', 'Nama penghuni')}${chip('barang', 'Barang')}</div>`;
       if (!shown.length) html += `<div class="empty-state">${recorded.length ? 'Tiada barang rosak atau perlu diganti. 🎉' : 'Tiada rekod kelengkapan' + (q ? ' yang sepadan' : '') + '.'}</div>`;

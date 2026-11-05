@@ -14,7 +14,7 @@ function waNumber() {
 function buildRoomReport(item, door, di, layoutName) {
   const label = door.label && door.label.trim() ? door.label.trim() : 'Pintu ' + (di + 1);
   const who = door.nama && door.nama.trim() ? ' (' + door.nama.trim() + (door.jumlah ? ', ' + door.jumlah + ' orang' : '') + ')' : '';
-  const KEADAAN = { baik: 'Baik', ganti: 'Perlu Diganti', rosak: 'Rosak' };
+  const KEADAAN = { baik: 'Bagus', ganti: 'Perlu Diganti / Rosak', rosak: 'Rosak' };
   const checklist = door.checklist || {}, defects = door.defects || {};
   const photoIds = [];
   const pics = e => [e.gambar, e.gambarTindakan].filter(g => g && !String(g).startsWith('data:')).map(g => {
@@ -23,7 +23,7 @@ function buildRoomReport(item, door, di, layoutName) {
   }).join('');
   const kel = ITEMS_CHECKLIST.filter(k => checklist[k.key] && checklist[k.key].status).map(k => {
     const e = checklist[k.key];
-    return '• ' + k.label + ' - ' + (KEADAAN[e.keadaan || 'baik'] || 'Baik') + (e.tarikh ? ' (' + e.tarikh + ')' : '') + pics(e);
+    return '• ' + k.label + ' - ' + (KEADAAN[e.keadaan || 'baik'] || 'Bagus') + (e.tarikh ? ' (' + e.tarikh + ')' : '') + pics(e);
   });
   const ker = DEFECT_CHECKLIST.filter(k => defects[k.key] && defects[k.key].status).map(k => {
     const e = defects[k.key];
